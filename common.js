@@ -202,8 +202,8 @@ function reportDownload(e){
     var downloadurl = e.url;
     var downloadfilename = e.fileName;
     $.post("https://api.troxal.com/troxal/report/downloads/", {
-        filename: dFilename,
-        url: dURL,
+        filename: downloadfilename,
+        url: downloadurl,
         user: email
     },
     function(data, status) {
