@@ -1,9 +1,9 @@
 {
     "update_url": "https://api.troxal.com/troxal/updates/",
     "name": "Troxal",
-    "version": "0.3.3",
+    "version": "0.3.4",
     "manifest_version": 2,
-    "content_security_policy": "script-src 'self' https://*.ablock.me https://*.troxal.com https://ablock.me/js/blockreport.js https://troxal.com/js/blockreport.js https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js; object-src 'self';",
+    "content_security_policy": "script-src 'self' 'sha256-LxLJoacyaVevN+CUEZDrJ75x4WeIyGIPQCcrf+3Gee4=' https://*.ablock.me https://*.troxal.com https://ablock.me/js/blockreport.js https://troxal.com/js/blockreport.js https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js; object-src 'self';",
     "background": {
         "scripts": [
             "data/js/jquery-3.2.1.min.js",
