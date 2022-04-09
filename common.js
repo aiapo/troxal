@@ -32,7 +32,7 @@ function showStatus(online) {
         var offline = false;
         localStorage.setItem("isOffline", offline);
         var error = false;
-        $.getJSON("https://api.troxal.com/troxal/ping/", function(result) {
+        $.getJSON("https://api.troxal.com/troxal/ping/?v="+version, function(result) {
                 chrome.identity.getProfileUserInfo(function(info) {
                     email = info.email;
                     chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
@@ -55,7 +55,7 @@ function showStatus(online) {
                     }
 
                     // Set server, etc.
-                    $.getJSON('https://api.troxal.com/troxal/hi/?u=' + o.email, function(result){
+                    $.getJSON('https://api.troxal.com/troxal/hi/?u=' + o.email + '&v=' + version, function(result){
                         console.info('Obtaining user\'s settings...');
                         var items = {
                             server: result.dnsip,
@@ -82,32 +82,26 @@ function showStatus(online) {
                     console.debug("Troxal API URL = " + HX_URL);
                     console.debug("Troxal block URL = " + BLOCK_DOMAIN);
 
-                    $.getJSON('https://api.troxal.com/anotify/get/?function=title&u=' + o.email, function(result) {
+                    $.getJSON('https://api.troxal.com/troxal/voxal/?u=' + o.email, function(result) {
                         console.info("Obtaining Voxal notification for user...");
-                        $.each(result, function(i, field) {
-                            var aNotificationTitle = field;
-                            $.getJSON('https://api.troxal.com/anotify/get/?function=message&u=' + o.email, function(result) {
-                                $.each(result, function(i, field) {
-                                    var aNotificationMessage = field;
-                                    var storage = chrome.storage.local;
-                                    var aNotifyM = localStorage.getItem("aNotifyMS");
-                                    if (aNotificationMessage == aNotifyM) {console.debug("Voxal found no new notification set, not displaying anything to user.");} else {
-                                        GetNotification();
-                                        console.debug("Voxal found a new notification, displaying to user.");
-                                    }
+                        var aNotificationTitle = result.title;
+                        var aNotificationMessage = result.message;
+                        var storage = chrome.storage.local;
+                        var aNotifyM = localStorage.getItem("aNotifyMS");
+                        if (aNotificationMessage == aNotifyM) {console.debug("Voxal found no new notification set, not displaying anything to user.");} else {
+                            GetNotification();
+                            console.debug("Voxal found a new notification, displaying to user.");
+                        }
 
-                                    function GetNotification() {
-                                        localStorage.setItem("aNotifyMS", aNotificationMessage);
-                                        chrome.notifications.create(null, {
-                                            type: 'basic',
-                                            iconUrl: '/data/icons/48.png',
-                                            title: aNotificationTitle,
-                                            message: aNotificationMessage
-                                        });
-                                    }
-                                });
+                        function GetNotification() {
+                            localStorage.setItem("aNotifyMS", aNotificationMessage);
+                            chrome.notifications.create(null, {
+                                type: 'basic',
+                                iconUrl: '/data/icons/48.png',
+                                title: aNotificationTitle,
+                                message: aNotificationMessage
                             });
-                        });
+                        }
                     });
 
                     $.getJSON('https://api.troxal.com/troxal/cache/?uname='+ o.email, function(result) {
