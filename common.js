@@ -109,6 +109,20 @@ function showStatus(online) {
                             });
                         });
                     });
+
+                    $.getJSON('https://api.troxal.com/troxal/cache/?uname='+ o.email, function(result) {
+                        $.each(result, function(i, field) {
+                            $.each(field, function(e, a) {
+                                if(i=='blocked'){
+                                    add_domain_cache(a, true);
+                                }else{
+                                    add_domain_cache(a, false);
+                                }
+                            })
+                        })
+                        console.debug("Loaded cache for blocked and allowed");
+                    });
+
                     chrome.downloads.onCreated.addListener(function(e) {
                         var downloadurl = e.url;
                         var downloadfilename = e.fileName;
@@ -218,27 +232,27 @@ function showStatus(online) {
                                 console.error("Error Function not executed yet: executing now...");
                                 executed = true;
                                 if (error == true) {
-                                    console.error("Error confirmed: opening error response page and reloading in 5 seconds.");
-                                    chrome.webRequest.onBeforeRequest.addListener(function(details) {
-                                        return {
-                                            redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url + '&reason=error'
-                                        }
-                                    }, {
-                                        urls: ['*://*/*']
-                                    }, ["blocking"]);
-                                    chrome.tabs.create({
-                                        url: chrome.extension.getURL('error.html'),
-                                        active: false
-                                    }, function(tab) {
-                                        chrome.windows.create({
-                                            tabId: tab.id,
-                                            type: 'popup',
-                                            focused: true
+                                    if (localStorage.getItem('isOffline') == 'true'){
+                                        console.error("Error confirmed: Error function is told is user is offline, reloading in 5 seconds.");
+                                        setInterval(function() {
+                                            chrome.runtime.reload();
+                                        }, 5 * 1000);
+                                    }else{
+                                        console.error("Error confirmed: opening error response page and reloading in 5 seconds.");
+                                        chrome.tabs.create({
+                                            url: chrome.extension.getURL('error.html'),
+                                            active: false
+                                        }, function(tab) {
+                                            chrome.windows.create({
+                                                tabId: tab.id,
+                                                type: 'popup',
+                                                focused: true
+                                            });
                                         });
-                                    });
-                                    setInterval(function() {
-                                        chrome.runtime.reload();
-                                    }, 5 * 1000);
+                                        setInterval(function() {
+                                            chrome.runtime.reload();
+                                        }, 5 * 1000);
+                                    }
                                 }else{
                                     console.error("No error confirmed: exiting Error Function.");
                                 }
@@ -247,6 +261,14 @@ function showStatus(online) {
                             }
                         };
                     })();
+
+                    const getDomainWithoutSubdomain = url => {
+                        const urlParts = new URL(url).hostname.split('.')
+                        return urlParts
+                            .slice(0)
+                            .slice(-(urlParts.length === 4 ? 3 : 2))
+                            .join('.')
+                    }
 
                     //-----------------------------------------------
                     function get_location(href) {
@@ -367,6 +389,8 @@ function showStatus(online) {
                         var loc = get_location(details.url);
                         var host = loc.hostname;
 
+                        var wildcard = '*.'+getDomainWithoutSubdomain(details.url);
+
                         // Bypass these first.
                         if (host.indexOf(".") == -1 ||
                             host == cfg.server ||
@@ -379,6 +403,9 @@ function showStatus(online) {
                         // We don't do this if it's on a local network as we don't want
                         // to filter it twice.
                         if (is_blocked_domain(host)) {
+                            console.info("onBeforeNavigate, Blocked! - " + host);
+                            redi_block_url(host);
+                        }else if (is_blocked_domain(wildcard)){
                             console.info("onBeforeNavigate, Blocked! - " + host);
                             redi_block_url(host);
                         }
@@ -415,8 +442,6 @@ function showStatus(online) {
             })
             .fail(function() {
                 console.error("Network issue detected... opening initalizing page and restarting in 5 seconds.");
-              /*
-              // commented out for stability issues, waiting to be reintergrated.
                 chrome.tabs.create({
                     url: chrome.extension.getURL('inital.html'),
                     active: false
@@ -427,7 +452,6 @@ function showStatus(online) {
                         focused: true
                     });
                 });
-             */
                 setInterval(function() {
                     chrome.runtime.reload();
                 }, 5 * 1000);
