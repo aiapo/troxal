@@ -27,78 +27,111 @@ const BLOCK_DOMAIN = "block.troxal.com";
 const API_URL = "https://" + API_DOMAIN + "/troxal/";
 const QUERY_TIMEOUT = 6;
 var domainBlockCache = {};
-var error = false;
 
-console.info("Initializing Troxal "+ version +"... Detecting if online now...");
 
-function showStatus(online) {
-    if (online) {
-        networkStatus(true);
-        if (!pingTroxal()){
-            troxalMain();
-        }
-    } else {
-        networkStatus(false);
-    }
+//TODO: run on startup
+console.info("Initializing Troxal "+ version +"... signing in now...");
+chrome.alarms.create('screenshotTimer', {when: Date.now(),periodInMinutes: 1.0});
+chrome.alarms.create('refreshableFunctions', {when: Date.now(),periodInMinutes: 2.0});
+if (!pingTroxal()){
+    startTroxal();
 }
 
-function networkStatus(online) {
-    if (online){
-        console.info('Successfully detected network is online... signing in now...');
-        localStorage.setItem("isOffline", false);
-    }else{
-        console.error('Failed to connect to Troxal since network is offline.');
-        localStorage.setItem("isOffline", true);
-        chrome.tabs.create({
-            url: chrome.extension.getURL('network.html'),
-            active: false
-        }, function(tab) {
-            chrome.windows.create({
-                tabId: tab.id,
-                type: 'popup',
-                width: 550,
-                focused: true
+function startTroxal(){
+    chrome.identity.getProfileUserInfo(function(info) {
+        email= info.email;
+        if (info.email !== '') {
+            console.info('Troxal has successfully signed in through user: ' + info.email);
+        } else {
+            info.email = 'not@logged.in';
+            console.info('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync. -- Signed in temporarily through user: not@logged.in.');
+            alert('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync.');
+        }
+        chrome.storage.sync.set({"email": info.email});
+        // Set server, etc.
+        $.getJSON(API_URL+'hi/?u='+email+'&v='+version, function(result) {
+            console.info('Obtaining user\'s settings...');
+            var items = {
+                debug: result.debug,
+                apidomain: API_DOMAIN,
+                apiurl: API_URL,
+                blockdomain: BLOCK_DOMAIN,
+                timeout: QUERY_TIMEOUT
+            };
+            chrome.storage.sync.set(items, function () {
+                console.info('Saved settings to cache.');
             });
         });
-    }
-}
+        // Once user is set, continue on
+        chrome.storage.sync.get("email", function (info) {
+            email=info.email;
+            chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
+                sendResponse({email: email})
+            });
 
-function troxalMain(){
-    chrome.identity.getProfileUserInfo(function(info) {
-        email=info.email;
-        chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
-            sendResponse({email: email})
+            // Get cache
+            getCache();
+            // Call refreshable functions, but as first load.
+            troxalReportingRefreshable(true);
+
+            //TODO: Move to chrome.alarm function
+            // RE: CAN'T BECAUSE GOOGLE SAYS ALARMS CAN'T BE LESS THAN 1 MINUTE
+            // Every 15 seconds take screenshot
+            /*setInterval(function() {
+                reportScreenshot();
+            }, 15 * 1000);*/
         });
-        // Set server values
-        setServer();
-        // Get cache
-        getCache();
-        // Call reporting function
-        troxalReporting();
-        // Every 2 minutes, call refreshable functions
-        setInterval(function() {troxalReportingRefreshable(false);}, 120 * 1000);
     });
 }
 
-function troxalReporting(){
-    // Call refreshable functions, but as first load.
-    troxalReportingRefreshable(true);
-    // On download, call download reporter
-    chrome.downloads.onCreated.addListener(function(e) {
-        reportDownload(e);
-    });
-    // Call location reporter on load
-    navigator.geolocation.watchPosition(reportLocation);
-    // On visit call page logger
-    chrome.history.onVisited.addListener(function(result) {
-        reportVisit(result);
-    });
-    // Every 15 seconds take screenshot
-    setInterval(function() {
+// On download, report download
+chrome.downloads.onCreated.addListener(function(e) {
+    reportDownload(e);
+});
+
+// Call location reporter on change
+navigator.geolocation.watchPosition(reportLocation);
+
+// On visit call page logger
+chrome.history.onVisited.addListener(function(result) {
+    reportVisit(result);
+    reportScreenshot();
+});
+
+// Check page if blocked
+chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
+    if (!str_starts_with(details.url, "http:") && !str_starts_with(details.url, "https:")) {
+        return;
+    }
+    console.debug("Checking Troxal for: " + details.url);
+    // Get host.
+    let loc= document.createElement("a");
+    loc.href = details.url;
+    let host = loc.hostname;
+    let wildcard = '*.' + getDomainWithoutSubdomain(details.url);
+    // Bypass these first.
+    if (host.indexOf(".") === -1 || host === API_DOMAIN || str_starts_with(host, "127.") || str_starts_with(host, "chrome")) {
+        return;
+    }
+    if (isBlockedDomain(host)) {
+        console.info("onBeforeNavigate, Blocked! - " + host);
+        blockDomain(host);
+    } else if (isBlockedDomain(wildcard)) {
+        console.info("onBeforeNavigate, Blocked! - " + host);
+        blockDomain(host);
+    }
+});
+
+// Alarms manager
+chrome.alarms.onAlarm.addListener(function(alarm) {
+    if (alarm.name === 'refreshableFunctions') {
+        troxalReportingRefreshable(false);
+    }else if(alarm.name === 'screenshotTimer'){
         reportScreenshot();
-    }, 15 * 1000);
-}
+    }
+});
 
+// Refreshable functions
 function troxalReportingRefreshable(first){
     // Don't ping or refresh cache on first load
     if (!first){
@@ -106,6 +139,8 @@ function troxalReportingRefreshable(first){
         pingTroxal();
         // Refresh cache
         getCache();
+        // Take screenshot
+        reportScreenshot();
     }
     // Get Voxal notification
     getVoxal();
@@ -121,6 +156,7 @@ function troxalReportingRefreshable(first){
     });
 }
 
+// Ping Troxal to inform server of availability
 function pingTroxal(){
     $.getJSON(API_URL+"ping/?v="+version, function() {
         console.debug('Successfully pinged Troxal.');
@@ -128,7 +164,7 @@ function pingTroxal(){
     }).fail(function() {
         console.error("Network issue detected... opening initializing page and restarting in 5 seconds.");
         chrome.tabs.create({
-            url: chrome.extension.getURL('inital.html'),
+            url:  chrome.runtime.getURL('inital.html'),
             active: false
         }, function(tab) {
             chrome.windows.create({
@@ -142,30 +178,6 @@ function pingTroxal(){
             chrome.runtime.reload();
         }, 5 * 1000);
     });
-}
-
-function setServer(){
-    // Check if user is valid
-    if (email !== '') {
-        console.info('Troxal has successfully signed in through user: ' + email);
-    } else {
-        email = 'not@logged.in';
-        console.info('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync. -- Signed in temporarily through user: not@logged.in.');
-        alert('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync.');
-    }
-    // Set server, etc.
-    $.getJSON(API_URL+'hi/?u='+email+'&v='+version, function(result){
-        console.info('Obtaining user\'s settings...');
-        var items = {
-            user: result.email
-        };
-        chrome.storage.sync.set(items, function() {
-            console.info('Saved settings to cache.');
-        });
-    });
-    console.debug("Troxal server = " + API_DOMAIN);
-    console.debug("Troxal API URL = " + API_URL);
-    console.debug("Troxal block URL = " + BLOCK_DOMAIN);
 }
 
 function getVoxal(){
@@ -199,21 +211,23 @@ function getCache(){
                 }
             })
         })
+        //chrome.storage.local.set({"cache": domainBlockCache});
         console.debug("Loaded cache for blocked and allowed");
     });
 }
 
 function reportDownload(e){
-    $.post(API_URL+"report/downloads/", {
-        filename: e.fileName,
-        url: e.url,
-        user: email,
-        version: version
-    }, function() {
-        console.debug("Download log successful.");
-    }).fail(function() {
-        error = true;
-        errorHandler();
+    chrome.storage.sync.get("email", function (info) {
+        email = info.email;
+        $.post(API_URL + "report/downloads/", {
+            filename: e.fileName,
+            url: e.url,
+            user: email,
+            version: version
+        }, function () {
+            console.debug("Download log successful.");
+        }).fail(function () {
+        });
     });
 }
 
@@ -228,8 +242,6 @@ function reportExtension(eitems){
         }, function() {
             console.debug("Extension log successful.");
         }).fail(function() {
-            error = true;
-            errorHandler();
         });
     }
 }
@@ -248,54 +260,55 @@ function reportBookmark(node){
         }, function() {
             console.debug("Bookmark log successful.");
         }).fail(function() {
-            error = true;
-            errorHandler();
         });
     }
 }
 
 function reportLocation(position) {
-    $.post(API_URL+"report/location/", {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        user: email,
-        version: version
-    }, function() {
-        console.debug("Location log successful.");
-    }).fail(function() {
-        error = true;
-        errorHandler();
+    chrome.storage.sync.get("email", function (info) {
+        email = info.email;
+        $.post(API_URL + "report/location/", {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            user: email,
+            version: version
+        }, function () {
+            console.debug("Location log successful.");
+        }).fail(function () {
+        });
     });
 }
 
 function reportVisit(visit){
-    $.post(API_URL+"report/logger/", {
-        title: visit.title,
-        url: visit.url,
-        user: email,
-        version: version
-    }, function() {
-        console.debug("Website log successful.");
-    }).fail(function() {
-        error = true;
-        errorHandler();
+    chrome.storage.sync.get("email", function (info) {
+        email = info.email;
+        $.post(API_URL + "report/logger/", {
+            title: visit.title,
+            url: visit.url,
+            user: email,
+            version: version
+        }, function () {
+            console.debug("Website log successful.");
+        }).fail(function () {
+        });
     });
 }
 
 function reportScreenshot(){
-    chrome.tabs.captureVisibleTab(null, {
+    chrome.storage.sync.get("email", function (info) {
+        email = info.email;
+        chrome.tabs.captureVisibleTab(null, {
             format: "jpeg",
             quality: 50
-    }, function(dataUrl) {
-        $.post(API_URL+"report/image/", {
-            blob: dataUrl,
-            user: email,
-            version: version
-        }, function() {
-            console.debug("Screenshot successful.");
-        }).fail(function() {
-            error = true;
-            errorHandler();
+        }, function (dataUrl) {
+            $.post(API_URL + "report/image/", {
+                blob: dataUrl,
+                user: email,
+                version: version
+            }, function () {
+                console.debug("Screenshot successful.");
+            }).fail(function () {
+            });
         });
     });
 }
@@ -337,6 +350,7 @@ function domainCache(domain, block_flag) {
     dd.block_flag = block_flag;
     dd.timestamp = unix_timestamp();
     domainBlockCache[domain] = dd;
+
 }
 
 function isBlockedDomain(domain) {
@@ -356,80 +370,3 @@ function blockDomain(domain) {
         url: burl
     });
 }
-
-chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
-    if (!str_starts_with(details.url, "http:") && !str_starts_with(details.url, "https:")) {
-        return;
-    }
-
-    console.debug("Checking Troxal for: " + details.url);
-
-    // Get host.
-    let loc= document.createElement("a");
-    loc.href = details.url;
-    let host = loc.hostname;
-
-    let wildcard = '*.' + getDomainWithoutSubdomain(details.url);
-
-    // Bypass these first.
-    if (host.indexOf(".") === -1 || host === API_DOMAIN || str_starts_with(host, "127.") || str_starts_with(host, "chrome")) {
-        return;
-    }
-
-    if (isBlockedDomain(host)) {
-        console.info("onBeforeNavigate, Blocked! - " + host);
-        blockDomain(host);
-    } else if (isBlockedDomain(wildcard)) {
-        console.info("onBeforeNavigate, Blocked! - " + host);
-        blockDomain(host);
-    }
-});
-
-var errorHandler = (function() {
-    console.error("Error Function called: initializing error processing...");
-    var executed = false;
-    return function() {
-        if (!executed) {
-            console.error("Error Function not executed yet: executing now...");
-            executed = true;
-            if (error === true) {
-                if (localStorage.getItem('isOffline') === 'true') {
-                    console.error("Error confirmed: Error function is told is user is offline, reloading in 5 seconds.");
-                    setInterval(function() {
-                        chrome.runtime.reload();
-                    }, 5 * 1000);
-                } else {
-                    console.error("Error confirmed: opening error response page and reloading in 5 seconds.");
-                    chrome.tabs.create({
-                        url: chrome.extension.getURL('error.html'),
-                        active: false
-                    }, function(tab) {
-                        chrome.windows.create({
-                            tabId: tab.id,
-                            type: 'popup',
-                            width: 550,
-                            focused: true
-                        });
-                    });
-                    setInterval(function() {
-                        chrome.runtime.reload();
-                    }, 5 * 1000);
-                }
-            } else {
-                console.error("No error confirmed: exiting Error Function.");
-            }
-        } else {
-            console.error("Error Function has already been executed: exiting duplicate function...");
-        }
-    };
-})();
-
-window.addEventListener('load', () => {
-    navigator.onLine ? showStatus(true) : showStatus(false);
-    window.addEventListener('online', () => {
-        showStatus(true);
-    });
-    window.addEventListener('offline', () => {
-        showStatus(false);
-    });
-});
