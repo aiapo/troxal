@@ -18,8 +18,8 @@
  * THIS MESSAGE IS NOT TO BE REMOVED.
  */
 
-// Log Handler
-function get_date14_win(){var d=new Date();var yyyy=d.getFullYear();var mm=d.getMonth()+1;if(mm<10){mm="0"+mm}var dd=d.getDate();if(dd<10){dd="0"+dd}var hh=d.getHours();if(hh<10){hh="0"+hh}var mi=d.getMinutes();if(mi<10){mi="0"+mi}var ss=d.getSeconds();if(ss<10){ss="0"+ss}return yyyy+"/"+mm+"/"+dd+" "+hh+":"+mi+":"+ss}console.debug=function(msg){console.log("DEBUG ["+get_date14_win()+"] "+msg)};console.error=function(msg){console.log("ERROR ["+get_date14_win()+"] "+msg)};console.info=function(msg){console.log("INFO ["+get_date14_win()+"] "+msg)};var version = chrome.runtime.getManifest().version;
+// Handlers
+function get_date14_win(){var d=new Date();var yyyy=d.getFullYear();var mm=d.getMonth()+1;if(mm<10){mm="0"+mm}var dd=d.getDate();if(dd<10){dd="0"+dd}var hh=d.getHours();if(hh<10){hh="0"+hh}var mi=d.getMinutes();if(mi<10){mi="0"+mi}var ss=d.getSeconds();if(ss<10){ss="0"+ss}return yyyy+"/"+mm+"/"+dd+" "+hh+":"+mi+":"+ss}console.debug=function(msg){console.log("DEBUG ["+get_date14_win()+"] "+msg)};console.error=function(msg){console.log("ERROR ["+get_date14_win()+"] "+msg)};console.info=function(msg){console.log("INFO ["+get_date14_win()+"] "+msg)};var version=chrome.runtime.getManifest().version;String.prototype.format=function(){var formatted=this;for(var i=0;i<arguments.length;i+=1){var regexp=new RegExp('\\{'+i+'\\}','gi');formatted=formatted.replace(regexp,arguments[i])}return formatted};function str_is_empty(str){return(typeof str=="undefined")||str==null||str==""}function str_is_not_empty(str){return!str_is_empty(str)}function str_starts_with(str,prefix){return str.indexOf(prefix)==0}function str_ends_with(str,suffix){return str.indexOf(suffix,str.length-suffix.length)!==-1}function null2str(obj){if(typeof obj=="undefined"){return ""}return obj==null?"":obj}function null2bool(obj){if(typeof obj=="undefined"){return false}return obj==null?false:obj}function unix_timestamp(){return Math.round(new Date().getTime()/1000)}
 
 // Troxal Management Services
 console.info("Initalizing Troxal " + version +"... Detecting if online now...");
@@ -53,9 +53,35 @@ function showStatus(online) {
                         console.info('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync. -- Signed in temporarily through user: not@logged.in.');
                         alert('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync.');
                     }
+
+                    // Set server, etc.
+                    $.getJSON('https://api.troxal.com/troxal/hi/?u=' + o.email, function(result){
+                        console.info('Obtaining user\'s settings...');
+                        var items = {
+                            server: result.dnsip,
+                            token: result.dnscode
+                        };
+                        chrome.storage.sync.set(items, function() {
+                            console.info('Saved settings to cache.');
+                        });
+                    });
+
                     if(chrome.runtime.setUninstallURL) {
                         chrome.runtime.setUninstallURL('https://block.troxal.com/uninstalled?u='+o.email);
                     }
+
+                    var API_DOMAIN = "api.troxal.com";
+                    var DEFAULT_CACHE_TTL = 60;
+                    var QUERY_TIMEOUT = 6;
+                    var BLOCK_DOMAIN = "block.troxal.com";
+                    var HX_URL = "https://" + API_DOMAIN + "/troxal/check";
+                    var cfg = new Config();
+                    var g_domain_cache = {};
+
+                    console.debug("Troxal server = " + API_DOMAIN);
+                    console.debug("Troxal API URL = " + HX_URL);
+                    console.debug("Troxal block URL = " + BLOCK_DOMAIN);
+
                     $.getJSON('https://api.troxal.com/anotify/get/?function=title&u=' + o.email, function(result) {
                         console.info("Obtaining Voxal notification for user...");
                         $.each(result, function(i, field) {
@@ -183,9 +209,7 @@ function showStatus(online) {
                             }
                         );
                     }, 15 * 1000);
-                    chrome.tabs.onActivated.addListener(function(activeInfo) {
-                        console.debug("Changed Tab -- Current Active Tab ID: " + activeInfo.tabId);
-                    });
+
                     var errorcode = (function() {
                         console.error("Error Function called: intitalizing error processing...");
                         var executed = false;
@@ -224,34 +248,6 @@ function showStatus(online) {
                         };
                     })();
 
-                    // STARTING DNS BLOCK INTERGRATION
-                    //-----------------------------------------------
-                    // Global
-                    var DEFAULT_CACHE_TTL = 60;
-                    var QUERY_TIMEOUT = 6;
-                    var API_DOMAIN = "api.troxal.com";
-                    var BLOCK_DOMAIN = "block.troxal.com";
-
-                    var cfg = new Config();
-
-                    var g_domain_cache = {};
-
-                    // Function
-                    String.prototype.format=function(){var formatted=this;for(var i=0;i<arguments.length;i+=1){var regexp=new RegExp('\\{'+i+'\\}','gi');formatted=formatted.replace(regexp,arguments[i])}return formatted};
-
-                    //-----------------------------------------------
-                    function str_is_empty(str) {return (typeof str == "undefined") || str == null || str == "";}
-                    function str_is_not_empty(str) {return !str_is_empty(str);}
-                    function str_starts_with(str, prefix) {return str.indexOf(prefix) == 0;}
-                    function str_ends_with(str, suffix) {return str.indexOf(suffix, str.length - suffix.length) !== -1;}
-
-                    //-----------------------------------------------
-                    function null2str(obj){if(typeof obj=="undefined"){return ""}return obj==null?"":obj}
-                    function null2bool(obj){if(typeof obj=="undefined"){return false}return obj==null?false:obj}
-
-                    //-----------------------------------------------
-                    function unix_timestamp() {return Math.round(new Date().getTime() / 1000);}
-
                     //-----------------------------------------------
                     function get_location(href) {
                         var location = document.createElement("a");
@@ -264,24 +260,13 @@ function showStatus(online) {
                     }
 
                     //-----------------------------------------------
-                    function is_valid_domain(line) {
-                        var arr = line.split(/\s+/);
-                        for (var i = 0; i < arr.length; i++) {
-                            if (arr[i].search(/\.\w{2,}$/) == -1) {
-                                return false;
-                            }
-                        }
-                        return true;
-                    }
-
-                    //-----------------------------------------------
                     function hx_lookup(domain) {
-                        if (str_is_empty(cfg.get_hx_url()) || str_is_empty(cfg.get_token())) {
-                            console.error("hx_lookup, Invalid hx_url or no token!");
+                        if (str_is_empty(HX_URL)) {
+                            console.error("hx_lookup, Invalid hx_url");
                             return;
                         }
 
-                        var tgt_url = cfg.get_hx_url() + "?token=" + cfg.get_token() + "&domain=https://" + domain + "&uname=" + o.email;
+                        var tgt_url = HX_URL + "?domain=https://" + domain + "&uname=" + o.email;
 
                         var x = new XMLHttpRequest();
                         x.open("GET", tgt_url, true);
@@ -354,102 +339,21 @@ function showStatus(online) {
                         }
                     }
 
-                    //-----------------------------------------------
-                    function has_list_domain(list, domain) {
-                        domain = domain.toLowerCase();
-                        for (var i = 0; i < list.length; i++) {
-                            var temp = list[i];
-
-                            if (str_starts_with(temp, "*.")) {
-                                // Exact matching first.
-                                if (temp == "*." + domain) {
-                                    console.debug("domain : " + domain);
-                                    return true;
-                                }
-
-                                // Ends with.
-                                if (str_ends_with(domain, temp.substring(1))) {
-                                    console.debug("domain : " + domain);
-                                    return true;
-                                }
-                            } else {
-                                if (temp == domain) {
-                                    console.debug("domain : " + domain);
-                                    return true;
-                                }
-                            }
-                        }
-
-                        return false;
-                    }
-
                     // Config.
                     function Config() {
-                        this.server = "";
-                        this.token = "";
-                        this.hx_url = "";
-                        this.block_url = "";
-
-                        this.enable_pw = false;
                         this.load_time = 0;
 
-                        // Binding this to self.
                         var self = this;
 
-                        //-----------------------------------------------
                         this.load = function() {
-                            var keys = ["server", "token"];
-
-                            chrome.storage.sync.get(keys, function(items) {
-                                self.server = null2str(items.server);
-                                self.token = null2str(items.token);
-                                self.enable_pw = null2str(items.enable_pw);
-
-                                if (str_is_empty(self.server)) {
-                                    self.hx_url = "";
-                                    self.block_url = "";
-                                } else {
-                                    self.hx_url = "https://" + self.server + "/hxlistener";
-                                    self.block_url = "https://block.troxal.com/";
-                                }
-
-                                self.print();
-                            });
-
                             this.load_time = unix_timestamp();
                         };
 
-                        //-----------------------------------------------
-                        this.is_valid = function() {return str_is_not_empty(this.server) && str_is_not_empty(this.token);};
+                        this.is_valid = function() {return str_is_not_empty(API_DOMAIN);};
 
-                        //-----------------------------------------------
-                        this.get_hx_url = function() {return this.hx_url;};
-                        this.get_block_url = function() {return this.block_url;};
-                        this.get_token = function() {return this.token;};
-
-                        //-----------------------------------------------
-                        this.print = function() {
-                            console.debug("Troxal server = " + this.server);
-                            console.debug("Troxal token = " + this.token);
-                            console.debug("Troxal API URL = " + this.hx_url);
-                            console.debug("Troxal block URL = " + this.block_url);
-                            console.debug("Troxal config time = " + this.load_time);
-                        };
+                        this.get_hx_url = function() {return HX_URL;};
+                        this.get_block_url = function() {return "https://" + BLOCK_DOMAIN;};
                     }
-
-                    //---------------------------------------------
-                    // Set server, etc.
-                    $.getJSON('https://api.troxal.com/troxal/hi/?u=' + o.email, function(result){
-                        console.info('Obtaining user\'s settings...');
-                        var items = {
-                            server: result.dnsip,
-                            token: result.dnscode,
-                            enable_pw: result.dnsblock
-                        };
-                        chrome.storage.sync.set(items, function() {
-                            console.info('Saved settings to cache.');
-                        });
-                    });
                     
                     //-----------------------------------------------
                     chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
@@ -466,7 +370,6 @@ function showStatus(online) {
                         // Bypass these first.
                         if (host.indexOf(".") == -1 ||
                             host == cfg.server ||
-                            host == cfg.login_server ||
                             str_starts_with(host, "127.") ||
                             str_starts_with(host, "chrome")) {
 
