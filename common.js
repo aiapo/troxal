@@ -116,16 +116,6 @@ $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
                             }, {
                                 urls: ['*://*/*']
                             }, ["blocking"]);
-                            chrome.tabs.create({
-                                url: chrome.extension.getURL('error.html'),
-                                active: false
-                            }, function (tab) {
-                                chrome.windows.create({
-                                    tabId: tab.id,
-                                    type: 'popup',
-                                    focused: true
-                                });
-                            });
                             setInterval(function () {
                                 chrome.runtime.reload();
                             }, 5 * 1000);
