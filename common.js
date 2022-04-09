@@ -27,85 +27,146 @@ const BLOCK_DOMAIN = "block.troxal.com";
 const API_URL = "https://" + API_DOMAIN + "/troxal/";
 const QUERY_TIMEOUT = 6;
 var domainBlockCache = {};
-var error = false;
 
-console.info("Initializing Troxal "+ version +"... Detecting if online now...");
 
-function showStatus(online) {
-    if (online) {
-        networkStatus(true);
-        if (!pingTroxal()){
-            troxalMain();
-        }
-    } else {
-        networkStatus(false);
-    }
-}
+//TODO: run on startup
+console.info("Initializing Troxal "+ version +"... signing in now...");
+chrome.alarms.create('screenshotTimer', {when: Date.now(),periodInMinutes: 1.0});
+chrome.alarms.create('refreshableFunctions', {when: Date.now(),periodInMinutes: 2.0});
+ping().then(r => startTroxal());
 
-function networkStatus(online) {
-    if (online){
-        console.info('Successfully detected network is online... signing in now...');
-        localStorage.setItem("isOffline", false);
-    }else{
-        console.error('Failed to connect to Troxal since network is offline.');
-        localStorage.setItem("isOffline", true);
-        chrome.tabs.create({
-            url: chrome.extension.getURL('network.html'),
-            active: false
-        }, function(tab) {
-            chrome.windows.create({
-                tabId: tab.id,
-                type: 'popup',
-                width: 550,
-                focused: true
-            });
-        });
-    }
-}
-
-function troxalMain(){
+function startTroxal(){
     chrome.identity.getProfileUserInfo(function(info) {
-        email=info.email;
-        chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
-            sendResponse({email: email})
+        email= info.email;
+        if (info.email !== '') {
+            console.info('Troxal has successfully signed in through user: ' + info.email);
+        } else {
+            info.email = 'not@logged.in';
+            console.info('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync. -- Signed in temporarily through user: not@logged.in.');
+            chrome.notifications.create(null, {
+                type: 'basic',
+                iconUrl: '/data/icons/48.png',
+                title: "Not signed in to Troxal.",
+                message: "Because you are not signed in through Chrome Sync, Troxal was unable to sign in. Sign in to continue browsing."
+            });
+        }
+        chrome.storage.sync.set({"email": info.email});
+
+        // Once user is set, continue on
+        chrome.storage.sync.get("email", function (info) {
+            email=info.email;
+            getServer().then(r => setServer(r));
+            // Get cache
+            getCache().then(r => loadCache(r));
+            // Call refreshable functions, but as first load.
+            troxalReportingRefreshable(true);
+
+            debugStorage('sync');
+
         });
-        // Set server values
-        setServer();
-        // Get cache
-        getCache();
-        // Call reporting function
-        troxalReporting();
-        // Every 2 minutes, call refreshable functions
-        setInterval(function() {troxalReportingRefreshable(false);}, 120 * 1000);
     });
 }
 
-function troxalReporting(){
-    // Call refreshable functions, but as first load.
-    troxalReportingRefreshable(true);
-    // On download, call download reporter
-    chrome.downloads.onCreated.addListener(function(e) {
-        reportDownload(e);
+function debugStorage(type){
+    if (type==='sync'){
+        chrome.storage.sync.get(null, function (data) {
+            console.debug("--------- START SYNCED STORAGE DUMP ---------");
+            Object.entries(data).forEach(([key, value]) => {
+                console.debug(key+": "+value);
+            })
+            console.debug("--------- END SYNCED STORAGE DUMP ---------");
+        });
+    }else{
+        chrome.storage.local.get(null, function (data) {
+            console.debug("--------- START LOCAL STORAGE DUMP ---------");
+            Object.entries(data).forEach(([key, value]) => {
+                console.debug(key+": "+value);
+                /*Object.entries(value).forEach(([key, value]) => {
+                    Object.entries(value).forEach(([key, value]) => {
+                        console.debug(key+" " +value);
+                    })
+                })*/
+            })
+
+            console.debug("--------- END LOCAL STORAGE DUMP ---------");
+        });
+    }
+
+}
+
+async function getServer(){
+    console.info('Obtaining user\'s settings...');
+    let url = API_URL+'hi/?u='+email+'&v='+version;
+    try {
+        let res = await fetch(url);
+        return await res.json();
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function setServer(result){
+    var items = {
+        debug: result.debug,
+        apidomain: API_DOMAIN,
+        apiurl: API_URL,
+        blockdomain: BLOCK_DOMAIN,
+        timeout: QUERY_TIMEOUT
+    };
+    chrome.storage.sync.set(items, function () {
+        console.info('Saved settings to cache.');
     });
-    // Call location reporter on load
-    navigator.geolocation.watchPosition(reportLocation);
-    // On visit call page logger
-    chrome.history.onVisited.addListener(function(result) {
-        reportVisit(result);
-    });
-    // Every 15 seconds take screenshot
-    setInterval(function() {
+}
+
+// On download, report download
+chrome.downloads.onCreated.addListener(function(e) {
+    reportDownload(e);
+});
+
+
+// On visit call page logger
+chrome.history.onVisited.addListener(function(result) {
+    reportVisit(result);
+    reportScreenshot();
+});
+
+// Check page if blocked
+chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
+    if (!str_starts_with(details.url, "http:") && !str_starts_with(details.url, "https:")) {
+        return;
+    }
+    let host = details.url;
+    console.debug("Checking Troxal for: " + host);
+    let wildcard = 'https://*.' + getDomainWithoutSubdomain(host);
+
+    if (isBlockedDomain(host)) {
+        console.info("onBeforeNavigate, Blocked! - " + host);
+        blockDomain(host);
+    } else if (isBlockedDomain(wildcard)) {
+        console.info("onBeforeNavigate, Blocked! - " + host);
+        blockDomain(host);
+    }
+});
+
+// Alarms manager
+chrome.alarms.onAlarm.addListener(function(alarm) {
+    if (alarm.name === 'refreshableFunctions') {
+        troxalReportingRefreshable(false);
+    }else if(alarm.name === 'screenshotTimer'){
         reportScreenshot();
-    }, 15 * 1000);
-}
+    }
+});
 
+// Refreshable functions
 function troxalReportingRefreshable(first){
     // Don't ping or refresh cache on first load
     if (!first){
         // Ping Troxal again
-        pingTroxal();
+        ping();
         // Refresh cache
-        getCache();
+        getCache().then(r => loadCache(r));
+        // Take screenshot
+        reportScreenshot();
     }
     // Get Voxal notification
     getVoxal();
@@ -121,14 +182,16 @@ function troxalReportingRefreshable(first){
     });
 }
 
-function pingTroxal(){
-    $.getJSON(API_URL+"ping/?v="+version, function() {
-        console.debug('Successfully pinged Troxal.');
-        return true;
-    }).fail(function() {
+async function ping() {
+    let url = API_URL + "ping/?v=" + version;
+    try {
+        let res = await fetch(url);
+        const result = await res.json();
+    } catch (error) {
+        console.error(error);
         console.error("Network issue detected... opening initializing page and restarting in 5 seconds.");
         chrome.tabs.create({
-            url: chrome.extension.getURL('inital.html'),
+            url:  chrome.runtime.getURL('inital.html'),
             active: false
         }, function(tab) {
             chrome.windows.create({
@@ -141,36 +204,15 @@ function pingTroxal(){
         setInterval(function() {
             chrome.runtime.reload();
         }, 5 * 1000);
-    });
-}
-
-function setServer(){
-    // Check if user is valid
-    if (email !== '') {
-        console.info('Troxal has successfully signed in through user: ' + email);
-    } else {
-        email = 'not@logged.in';
-        console.info('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync. -- Signed in temporarily through user: not@logged.in.');
-        alert('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync.');
     }
-    // Set server, etc.
-    $.getJSON(API_URL+'hi/?u='+email+'&v='+version, function(result){
-        console.info('Obtaining user\'s settings...');
-        var items = {
-            user: result.email
-        };
-        chrome.storage.sync.set(items, function() {
-            console.info('Saved settings to cache.');
-        });
-    });
-    console.debug("Troxal server = " + API_DOMAIN);
-    console.debug("Troxal API URL = " + API_URL);
-    console.debug("Troxal block URL = " + BLOCK_DOMAIN);
 }
 
-function getVoxal(){
-    $.getJSON(API_URL+'voxal/?u='+email+'&v='+version, function(result) {
-        console.info("Obtaining Voxal notification for user...");
+async function getVoxal(){
+    console.info("Obtaining Voxal notification for user...");
+    let url = API_URL+'voxal/?u='+email+'&v='+version;
+    try {
+        let res = await fetch(url);
+        const result = await res.json();
         chrome.storage.sync.get("voxalLocalCache", function (obj) {
             if (result.message === obj.voxalLocalCache) {
                 console.debug("Voxal found no new notification set, not displaying anything to user.");
@@ -185,52 +227,66 @@ function getVoxal(){
                 });
             }
         });
-    });
+    } catch (error) {
+        console.error(error);
+    }
 }
 
-function getCache(){
-    $.getJSON(API_URL+'cache/?uname='+email+'&v='+version, function(result) {
-        $.each(result, function(i, field) {
-            $.each(field, function(e, a) {
-                if(i==='blocked'){
-                    domainCache(a, true);
-                }else{
-                    domainCache(a, false);
-                }
-            })
-        })
-        console.debug("Loaded cache for blocked and allowed");
-    });
+async function getCache(){
+    console.info("Obtaining cache for user...");
+    let url = API_URL+'cache/?uname='+email+'&v='+version;
+    try {
+        let res = await fetch(url);
+        return await res.json();
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+function loadCache(result){
+    Object.entries(result.blocked).forEach(([key, value]) => {
+        domainCache(value, true);
+    })
+    Object.entries(result.allowed).forEach(([key, value]) => {
+        domainCache(value, false);
+    })
+
+    console.debug("Loaded cache for blocked and allowed");
+    //chrome.storage.local.set({"cache": domainBlockCache});
 }
 
 function reportDownload(e){
-    $.post(API_URL+"report/downloads/", {
-        filename: e.fileName,
-        url: e.url,
-        user: email,
-        version: version
-    }, function() {
-        console.debug("Download log successful.");
-    }).fail(function() {
-        error = true;
-        errorHandler();
+    chrome.storage.sync.get("email", function (info) {
+        var bodyData = new FormData();
+        bodyData.append("filename", e.fileName);
+        bodyData.append("url", e.url);
+        bodyData.append("user", info.email);
+        bodyData.append("version", version);
+        let url = API_URL + "report/downloads/";
+        try {
+            let res = fetch(url, {method: "POST", body: bodyData});
+            console.debug("Download log successful.");
+        } catch (error) {
+            console.error(error);
+        }
     });
 }
 
 function reportExtension(eitems){
     for (let i = 0; i < eitems.length; i++) {
         let eitem = eitems[i];
-        $.post(API_URL+"report/extensions/", {
-            eid: eitem.id,
-            name: eitem.name,
-            user: email,
-            version: version
-        }, function() {
+        var bodyData = new FormData();
+        bodyData.append("eid", eitem.id);
+        bodyData.append("name", eitem.name);
+        bodyData.append("user", email);
+        bodyData.append("version", version);
+        let url = API_URL + "report/extensions/";
+        try {
+            let res = fetch(url, {method: "POST", body: bodyData});
             console.debug("Extension log successful.");
-        }).fail(function() {
-            error = true;
-            errorHandler();
-        });
+        } catch (error) {
+            console.error(error);
+        }
     }
 }
 
@@ -241,61 +297,55 @@ function reportBookmark(node){
         });
     }
     if (node.url) {
-        $.post(API_URL+"report/bookmarks/", {
-            url: node.url,
-            user: email,
-            version: version
-        }, function() {
+        var bodyData = new FormData();
+        bodyData.append("url", node.url);
+        bodyData.append("user", email);
+        bodyData.append("version", version);
+        let url = API_URL + "report/bookmarks/";
+        try {
+            let res = fetch(url, {method: "POST", body: bodyData});
             console.debug("Bookmark log successful.");
-        }).fail(function() {
-            error = true;
-            errorHandler();
-        });
+        } catch (error) {
+            console.error(error);
+        }
     }
 }
 
-function reportLocation(position) {
-    $.post(API_URL+"report/location/", {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        user: email,
-        version: version
-    }, function() {
-        console.debug("Location log successful.");
-    }).fail(function() {
-        error = true;
-        errorHandler();
-    });
-}
 
 function reportVisit(visit){
-    $.post(API_URL+"report/logger/", {
-        title: visit.title,
-        url: visit.url,
-        user: email,
-        version: version
-    }, function() {
-        console.debug("Website log successful.");
-    }).fail(function() {
-        error = true;
-        errorHandler();
+    chrome.storage.sync.get("email", function (info) {
+        var bodyData = new FormData();
+        bodyData.append("title", visit.title);
+        bodyData.append("url", visit.url);
+        bodyData.append("user", info.email);
+        bodyData.append("version", version);
+        let url = API_URL + "report/logger/";
+        try {
+            let res = fetch(url, {method: "POST", body: bodyData});
+            console.debug("Website log successful.");
+        } catch (error) {
+            console.error(error);
+        }
     });
 }
 
 function reportScreenshot(){
-    chrome.tabs.captureVisibleTab(null, {
+    chrome.storage.sync.get("email", function (info) {
+        chrome.tabs.captureVisibleTab(null, {
             format: "jpeg",
             quality: 50
-    }, function(dataUrl) {
-        $.post(API_URL+"report/image/", {
-            blob: dataUrl,
-            user: email,
-            version: version
-        }, function() {
-            console.debug("Screenshot successful.");
-        }).fail(function() {
-            error = true;
-            errorHandler();
+        }, function (dataUrl) {
+            var bodyData = new FormData();
+            bodyData.append("blob", dataUrl);
+            bodyData.append("user", info.email);
+            bodyData.append("version", version);
+            let url = API_URL + "report/image/";
+            try {
+                let res = fetch(url, {method: "POST", body: bodyData});
+                console.debug("Screenshot successful.");
+            } catch (error) {
+                console.error(error);
+            }
         });
     });
 }
@@ -305,30 +355,24 @@ const getDomainWithoutSubdomain = url => {
     return urlParts.slice(0).slice(-(urlParts.length === 4 ? 3 : 2)).join('.')
 }
 
-function domainLookup(domain) {
-    let checkAPI = API_URL+"check/?domain=https://"+domain+"&uname="+email+"&v="+version;
+async function domainLookup(domain) {
+    let url = API_URL+"check/v2/?domain="+domain+"&uname="+email+"&v="+version;
+    try {
+        let res = await fetch(url);
+        return await res.json();
+    } catch (error) {
+        console.error(error);
+    }
+}
 
-    let x = new XMLHttpRequest();
-    x.open("GET", checkAPI, true);
-    x.timeout = 1000 * QUERY_TIMEOUT;
-
-    x.onreadystatechange = function() {
-        if (x.readyState === 4) {
-            if (x.status === 200) {
-                let text = x.responseText;
-                console.debug("Site lookup for " + domain + " reports " + text);
-
-                if (text === "/BLOCK") {
-                    domainCache(domain, true);
-                    blockDomain(domain);
-                } else {
-                    domainCache(domain, false);
-                }
-            }
-        }
-    };
-
-    x.send();
+async function domainDecision(domain,res){
+    console.debug("Site lookup for " + domain + " reports " + res.action);
+    if (res.action === "block") {
+        domainCache(domain, true);
+        blockDomain(domain);
+    } else {
+        domainCache(domain, false);
+    }
 }
 
 function domainCache(domain, block_flag) {
@@ -340,9 +384,9 @@ function domainCache(domain, block_flag) {
 }
 
 function isBlockedDomain(domain) {
-    var dd = domainBlockCache[domain];
+    let dd = domainBlockCache[domain];
     if (dd == null) {
-        domainLookup(domain);
+        domainLookup(domain).then(r => domainDecision(domain,r));
         return false;
     }
     console.debug("Found cache for " + domain + ", " + dd.block_flag);
@@ -356,80 +400,3 @@ function blockDomain(domain) {
         url: burl
     });
 }
-
-chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
-    if (!str_starts_with(details.url, "http:") && !str_starts_with(details.url, "https:")) {
-        return;
-    }
-
-    console.debug("Checking Troxal for: " + details.url);
-
-    // Get host.
-    let loc= document.createElement("a");
-    loc.href = details.url;
-    let host = loc.hostname;
-
-    let wildcard = '*.' + getDomainWithoutSubdomain(details.url);
-
-    // Bypass these first.
-    if (host.indexOf(".") === -1 || host === API_DOMAIN || str_starts_with(host, "127.") || str_starts_with(host, "chrome")) {
-        return;
-    }
-
-    if (isBlockedDomain(host)) {
-        console.info("onBeforeNavigate, Blocked! - " + host);
-        blockDomain(host);
-    } else if (isBlockedDomain(wildcard)) {
-        console.info("onBeforeNavigate, Blocked! - " + host);
-        blockDomain(host);
-    }
-});
-
-var errorHandler = (function() {
-    console.error("Error Function called: initializing error processing...");
-    var executed = false;
-    return function() {
-        if (!executed) {
-            console.error("Error Function not executed yet: executing now...");
-            executed = true;
-            if (error === true) {
-                if (localStorage.getItem('isOffline') === 'true') {
-                    console.error("Error confirmed: Error function is told is user is offline, reloading in 5 seconds.");
-                    setInterval(function() {
-                        chrome.runtime.reload();
-                    }, 5 * 1000);
-                } else {
-                    console.error("Error confirmed: opening error response page and reloading in 5 seconds.");
-                    chrome.tabs.create({
-                        url: chrome.extension.getURL('error.html'),
-                        active: false
-                    }, function(tab) {
-                        chrome.windows.create({
-                            tabId: tab.id,
-                            type: 'popup',
-                            width: 550,
-                            focused: true
-                        });
-                    });
-                    setInterval(function() {
-                        chrome.runtime.reload();
-                    }, 5 * 1000);
-                }
-            } else {
-                console.error("No error confirmed: exiting Error Function.");
-            }
-        } else {
-            console.error("Error Function has already been executed: exiting duplicate function...");
-        }
-    };
-})();
-
-window.addEventListener('load', () => {
-    navigator.onLine ? showStatus(true) : showStatus(false);
-    window.addEventListener('online', () => {
-        showStatus(true);
-    });
-    window.addEventListener('offline', () => {
-        showStatus(false);
-    });
-});
