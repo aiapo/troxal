@@ -370,7 +370,7 @@ function hx_lookup(domain) {
         return;
     }
 
-    var tgt_url = HX_URL + "?domain=https://" + domain + "&uname=" + email;
+    var tgt_url = HX_URL + "/?domain=https://" + domain + "&uname=" + email;
 
     var x = new XMLHttpRequest();
     x.open("GET", tgt_url, true);

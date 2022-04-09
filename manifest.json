@@ -1,6 +1,6 @@
 {
     "name": "Troxal",
-    "version": "0.4.7",
+    "version": "0.4.8",
     "manifest_version": 2,
     "content_security_policy": "script-src 'self' 'sha256-QwhGigLVjhAtVi6efyKuf2jwJMeWHXrwoNG2vN54xX8=' 'sha256-LxLJoacyaVevN+CUEZDrJ75x4WeIyGIPQCcrf+3Gee4=' https://*.troxal.com https://troxal.com/js/blockreport.js https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js; object-src 'self';",
     "background": {
