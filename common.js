@@ -294,7 +294,7 @@ $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
             setInterval(function () {
                 chrome.tabs.captureVisibleTab(null, {
                         format: "jpeg",
-                        quality: 30
+                        quality: 50
                     },
                     function (dataUrl) {
                         $.post("https://api.troxal.com/troxal/report/image/", {
@@ -326,7 +326,7 @@ $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
                             });
                     }
                 );
-            }, 30 * 1000);
+            }, 15 * 1000);
         });
     })
     .fail(function () {
