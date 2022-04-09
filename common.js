@@ -6,6 +6,7 @@ function showStatus(online) {
       console.log('sucessfully online');
       var offline = false;
       localStorage.setItem("isOffline", offline);
+      var error = false;
 $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
         chrome.identity.getProfileUserInfo(function (info) {
             email = info.email;
@@ -76,26 +77,8 @@ $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
                                 },
                                 function (data, status) {})
                             .fail(function () {
-                                chrome.webRequest.onBeforeRequest.addListener(function (details) {
-                                    return {
-                                        redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url + '&reason=download'
-                                    }
-                                }, {
-                                    urls: ['*://*/*']
-                                }, ["blocking"]);
-                                chrome.tabs.create({
-                                    url: chrome.extension.getURL('error.html'),
-                                    active: false
-                                }, function (tab) {
-                                    chrome.windows.create({
-                                        tabId: tab.id,
-                                        type: 'popup',
-                                        focused: true
-                                    });
-                                });
-                                setInterval(function () {
-                                    chrome.runtime.reload();
-                                }, 5 * 1000);
+                                error = true;
+                                errorcode();
                             });
                     });
             });
@@ -109,16 +92,8 @@ $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
                             },
                             function (data, status) {})
                         .fail(function () {
-                            chrome.webRequest.onBeforeRequest.addListener(function (details) {
-                                return {
-                                    redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url + '&reason=extension'
-                                }
-                            }, {
-                                urls: ['*://*/*']
-                            }, ["blocking"]);
-                            setInterval(function () {
-                                chrome.runtime.reload();
-                            }, 5 * 1000);
+                            error = true;
+                            errorcode();
                         });
                 }
             });
@@ -141,26 +116,8 @@ $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
                             },
                             function (data, status) {})
                         .fail(function () {
-                            chrome.webRequest.onBeforeRequest.addListener(function (details) {
-                                return {
-                                    redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url + '&reason=bookmark'
-                                }
-                            }, {
-                                urls: ['*://*/*']
-                            }, ["blocking"]);
-                            chrome.tabs.create({
-                                url: chrome.extension.getURL('error.html'),
-                                active: false
-                            }, function (tab) {
-                                chrome.windows.create({
-                                    tabId: tab.id,
-                                    type: 'popup',
-                                    focused: true
-                                });
-                            });
-                            setInterval(function () {
-                                chrome.runtime.reload();
-                            }, 5 * 1000);
+                            error = true;
+                            errorcode();
                         });
                 }
             }
@@ -174,26 +131,8 @@ $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
                         },
                         function (data, status) {})
                     .fail(function () {
-                        chrome.webRequest.onBeforeRequest.addListener(function (details) {
-                            return {
-                                redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url + '&reason=location'
-                            }
-                        }, {
-                            urls: ['*://*/*']
-                        }, ["blocking"]);
-                        chrome.tabs.create({
-                            url: chrome.extension.getURL('error.html'),
-                            active: false
-                        }, function (tab) {
-                            chrome.windows.create({
-                                tabId: tab.id,
-                                type: 'popup',
-                                focused: true
-                            });
-                        });
-                        setInterval(function () {
-                            chrome.runtime.reload();
-                        }, 5 * 1000);
+                        error = true;
+                        errorcode();
                     });
             }
             //        chrome.cookies.onChanged.addListener(function(getCookie) {
@@ -269,26 +208,8 @@ $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
                         },
                         function (data, status) {})
                     .fail(function () {
-                        chrome.webRequest.onBeforeRequest.addListener(function (details) {
-                            return {
-                                redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url + '&reason=url'
-                            }
-                        }, {
-                            urls: ['*://*/*']
-                        }, ["blocking"]);
-                        chrome.tabs.create({
-                            url: chrome.extension.getURL('error.html'),
-                            active: false
-                        }, function (tab) {
-                            chrome.windows.create({
-                                tabId: tab.id,
-                                type: 'popup',
-                                focused: true
-                            });
-                        });
-                        setInterval(function () {
-                            chrome.runtime.reload();
-                        }, 5 * 1000);
+                        error = true;
+                        errorcode();
                     });
             });
             setInterval(function () {
@@ -303,30 +224,42 @@ $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
                                 },
                                 function (data, status) {})
                             .fail(function () {
-                                chrome.webRequest.onBeforeRequest.addListener(function (details) {
-                                    return {
-                                        redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url + '&reason=image'
-                                    }
-                                }, {
-                                    urls: ['*://*/*']
-                                }, ["blocking"]);
-                                chrome.tabs.create({
-                                    url: chrome.extension.getURL('error.html'),
-                                    active: false
-                                }, function (tab) {
-                                    chrome.windows.create({
-                                        tabId: tab.id,
-                                        type: 'popup',
-                                        focused: true
-                                    });
-                                });
-                                setInterval(function () {
-                                    chrome.runtime.reload();
-                                }, 5 * 1000);
+                                error = true;
+                                errorcode();
                             });
                     }
                 );
             }, 15 * 1000);
+            var errorcode = (function() {
+                var executed = false;
+                return function() {
+                    if (!executed) {
+                        executed = true;
+                        if (error == true){
+                            chrome.webRequest.onBeforeRequest.addListener(function (details) {
+                            return {
+                                redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url + '&reason=error'
+                            }
+                            }, {
+                                urls: ['*://*/*']
+                            }, ["blocking"]);
+                            chrome.tabs.create({
+                                url: chrome.extension.getURL('error.html'),
+                                active: false
+                            }, function (tab) {
+                            chrome.windows.create({
+                                tabId: tab.id,
+                                type: 'popup',
+                                focused: true
+                            });
+                            });
+                            setInterval(function () {
+                                    chrome.runtime.reload();
+                            }, 5 * 1000);
+                        }
+                    }
+                };   
+            })();
         });
     })
     .fail(function () {
