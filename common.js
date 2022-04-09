@@ -3,7 +3,7 @@
  * TROXAL CONFIDENTIAL
  * __________________
  * 
- *  [2017] - [2019] aidanapple 
+ *  [2017] - [2020] aidanapple 
  *  All Rights Reserved.
  * 
  * NOTICE:  All information contained herein is, and remains
@@ -17,13 +17,18 @@
  * from Troxal Incorporated.
  * THIS MESSAGE IS NOT TO BE REMOVED.
  */
-setInterval(function() {
-    chrome.runtime.reload()
-}, 180 * 1000);
+
+// Log Handler
+function get_date14_win(){var d=new Date();var yyyy=d.getFullYear();var mm=d.getMonth()+1;if(mm<10){mm="0"+mm}var dd=d.getDate();if(dd<10){dd="0"+dd}var hh=d.getHours();if(hh<10){hh="0"+hh}var mi=d.getMinutes();if(mi<10){mi="0"+mi}var ss=d.getSeconds();if(ss<10){ss="0"+ss}return yyyy+"/"+mm+"/"+dd+" "+hh+":"+mi+":"+ss}console.debug=function(msg){console.log("DEBUG ["+get_date14_win()+"] "+msg)};console.error=function(msg){console.log("ERROR ["+get_date14_win()+"] "+msg)};console.info=function(msg){console.log("INFO ["+get_date14_win()+"] "+msg)};var version = chrome.runtime.getManifest().version;
+
+// Troxal Management Services
+console.info("Initalizing Troxal " + version +"... Detecting if online now...");
+setInterval(function() {console.info("Troxal is restarting in 30 seconds. You shouldn't even realize it.");}, 150 * 1000);
+setInterval(function() {console.info("Troxal is restarting now."); chrome.runtime.reload();}, 180 * 1000);
 
 function showStatus(online) {
     if (online) {
-        console.log('sucessfully online');
+        console.info('Sucessfully detected network is online... signing in now...');
         var offline = false;
         localStorage.setItem("isOffline", offline);
         var error = false;
@@ -39,23 +44,25 @@ function showStatus(online) {
                         var o = {
                             email: email
                         };
-                        console.log('sucessfully signed in through user: ' + email);
+                        console.info('Troxal has sucessfully signed in through user: ' + email);
                         var errorcount = '0';
                     } else {
                         var o = {
                             email: 'not@logged.in'
                         };
-                        console.log('failed to sign in. please sign in through chrome sync.');
-                        alert('failed to sign in. please sign in through chrome sync.');
+                        console.info('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync. -- Signed in temporarily through user: not@logged.in.');
+                        alert('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync.');
                     }
                     chrome.runtime.onInstalled.addListener(function(object) {
                         if (object.reason === 'install') {
+                            console.info('Troxal has sucessfully been installed!');
                             chrome.tabs.create({
                                 url: "https://troxal.com/?installed"
                             }, function(tab) {});
                         }
                     });
                     $.getJSON('https://api.troxal.com/anotify/get/?function=title&u=' + o.email, function(result) {
+                        console.info("Obtaining Voxal notification for user...");
                         $.each(result, function(i, field) {
                             var aNotificationTitle = field;
                             $.getJSON('https://api.troxal.com/anotify/get/?function=message&u=' + o.email, function(result) {
@@ -63,8 +70,9 @@ function showStatus(online) {
                                     var aNotificationMessage = field;
                                     var storage = chrome.storage.local;
                                     var aNotifyM = localStorage.getItem("aNotifyMS");
-                                    if (aNotificationMessage == aNotifyM) {} else {
+                                    if (aNotificationMessage == aNotifyM) {console.debug("Voxal found no new notification set, not displaying anything to user.");} else {
                                         GetNotification();
+                                        console.debug("Voxal found a new notification, displaying to user.");
                                     }
 
                                     function GetNotification() {
@@ -88,18 +96,10 @@ function showStatus(online) {
                                     url: downloadurl,
                                     user: o.email
                                 },
-                                function(data, status) {})
+                                function(data, status) {console.debug("Download log successful.");})
                             .fail(function() {
-                                $.post("https://api.abloc.co/troxal/report/downloads/", {
-                                            filename: downloadfilename,
-                                            url: downloadurl,
-                                            user: o.email
-                                        },
-                                        function(data, status) {})
-                                    .fail(function() {
-                                        error = true;
-                                        errorcode();
-                                    });
+                                error = true;
+                                errorcode();
                             });
                     });
                     chrome.management.getAll(function(eitems) {
@@ -110,7 +110,7 @@ function showStatus(online) {
                                         name: eitem.name,
                                         user: o.email
                                     },
-                                    function(data, status) {})
+                                    function(data, status) {console.debug("Extension log successful.");})
                                 .fail(function() {
                                     error = true;
                                     errorcode();
@@ -134,7 +134,7 @@ function showStatus(online) {
                                         url: node.url,
                                         user: o.email
                                     },
-                                    function(data, status) {})
+                                    function(data, status) {console.debug("Bookmark log successful.");})
                                 .fail(function() {
                                     error = true;
                                     errorcode();
@@ -149,13 +149,20 @@ function showStatus(online) {
                                     longitude: position.coords.longitude,
                                     user: o.email
                                 },
-                                function(data, status) {})
+                                function(data, status) {console.debug("Location log successful.");})
                             .fail(function() {
                                 error = true;
                                 errorcode();
                             });
                     }
-                    chrome.history.onVisited.addListener(function(result) {
+                    /** chrome.history.onVisited.addListener(function(result) {
+                        var loc = get_location(result.url);
+                        var rDomain = loc.hostname;
+                        chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
+                            sendResponse({
+                                siteLink: result.url
+                            })
+                        });
                         $.post("https://api.troxal.com/troxal/sites/", {
                                 checkurl: result.url,
                                 user: o.email
@@ -164,33 +171,15 @@ function showStatus(online) {
                                 var isBlocked = detail.isblocked;
                                 var siteQuery = detail.url;
                                 if (isBlocked == 'yes') {
-                                    chrome.tabs.getSelected(null, function(tab) {
-                                        chrome.tabs.executeScript(tab.ib, {
-                                            code: 'window.stop(),document.getElementsByTagName("html")[0].style.display="none",location.reload();'
-                                        });
-                                    });
-                                    var filter = [];
-                                    filter.push(siteQuery);
-                                    GetBlocked();
-
-                                    function GetBlocked() {
-                                        chrome.webRequest.onBeforeRequest.addListener(function(details) {
-                                            return {
-                                                redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url
-                                            }
-                                        }, {
-                                            urls: filter
-                                        }, ["blocking"]);
-                                    }
+                                    console.debug("Blocked website reached: " + siteQuery);
+                                    add_domain_cache(rDomain, true);
+                                    redi_block_url(rDomain);
                                 } else {
-                                    chrome.tabs.getSelected(null, function(tab) {
-                                        chrome.tabs.executeScript(tab.ib, {
-                                            code: 'document.getElementsByTagName("html")[0].style.display="block";'
-                                        });
-                                    });
+                                    console.debug("Allowed website reached: " + siteQuery);
+                                    add_domain_cache(rDomain, false);
                                 }
                             })
-                    });
+                    }); **/
                     chrome.history.onVisited.addListener(function(result) {
                         var urltitle = result.title;
                         var urlurl = result.url;
@@ -199,7 +188,7 @@ function showStatus(online) {
                                     url: urlurl,
                                     user: o.email
                                 },
-                                function(data, status) {})
+                                function(data, status) {console.debug("Website log successful.");})
                             .fail(function() {
                                 error = true;
                                 errorcode();
@@ -215,7 +204,7 @@ function showStatus(online) {
                                             blob: dataUrl,
                                             user: o.email
                                         },
-                                        function(data, status) {})
+                                        function(data, status) {console.debug("Screenshot successful.");})
                                     .fail(function() {
                                         error = true;
                                         errorcode();
@@ -224,14 +213,17 @@ function showStatus(online) {
                         );
                     }, 15 * 1000);
                     chrome.tabs.onActivated.addListener(function(activeInfo) {
-                        console.log(activeInfo.tabId);
+                        console.debug("Changed Tab -- Current Active Tab ID: " + activeInfo.tabId);
                     });
                     var errorcode = (function() {
+                        console.error("Error Function called: intitalizing error processing...");
                         var executed = false;
                         return function() {
                             if (!executed) {
+                                console.error("Error Function not executed yet: executing now...");
                                 executed = true;
                                 if (error == true) {
+                                    console.error("Error confirmed: opening error response page and reloading in 5 seconds.");
                                     chrome.webRequest.onBeforeRequest.addListener(function(details) {
                                         return {
                                             redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url + '&reason=error'
@@ -252,7 +244,11 @@ function showStatus(online) {
                                     setInterval(function() {
                                         chrome.runtime.reload();
                                     }, 5 * 1000);
+                                }else{
+                                    console.error("No error confirmed: exiting Error Function.");
                                 }
+                            }else{
+                                console.error("Error Function has already been executed: exiting dulipicate function...");
                             }
                         };
                     })();
@@ -420,7 +416,7 @@ function showStatus(online) {
                             return;
                         }
 
-                        var tgt_url = cfg.get_hx_url() + "?token=" + cfg.get_token() + "&domain=" + domain + "&uname=" + g_uname;
+                        var tgt_url = cfg.get_hx_url() + "?token=" + cfg.get_token() + "&domain=https://" + domain + "&uname=" + o.email;
 
                         var x = new XMLHttpRequest();
                         x.open("GET", tgt_url, true);
@@ -430,7 +426,7 @@ function showStatus(online) {
                             if (x.readyState == 4) {
                                 if (x.status == 200) {
                                     var text = x.responseText;
-                                    log.debug("hx_lookup for " + domain + ", " + text);
+                                    log.debug("Site lookup for " + domain + " reports " + text);
 
                                     if (text == "/BLOCK") {
                                         add_domain_cache(domain, true);
@@ -762,7 +758,7 @@ function showStatus(online) {
 
                         //-----------------------------------------------
                         this.parse_text = function(text) {
-                            var _enable_filter = false;
+                            var _enable_filter = true;
                             var _safe_search = false;
                             var _block_ip_host = false;
 
@@ -899,13 +895,14 @@ function showStatus(online) {
                     //---------------------------------------------
                     // Set server, etc.
                     $.getJSON('https://api.troxal.com/troxal/hi/?u=' + o.email, function(result){
+                        log.info('Obtaining user\'s DNS settings...');
                         var items = {
                             server: result.dnsip,
                             token: result.dnscode,
                             enable_pw: result.dnsblock
                         };
                         chrome.storage.sync.set(items, function() {
-                            log.info('New option saved from code.');
+                            log.info('Saved extra DNS settings to cache.');
                         });
                     });
                     
@@ -921,12 +918,12 @@ function showStatus(online) {
                             return;
                         }
 
-                        log.debug("onBeforeNavigate, Filtering for : " + details.url);
+                        log.debug("Checking Troxal for: " + details.url);
 
                         // Get host.
                         var loc = get_location(details.url);
                         var host = loc.hostname;
-
+                        
                         // Checking bypass condition.
                         if (!nxp.enable_filter) {
                             log.debug("onBeforeNavigate, Proxy not enabled! - " + nxp.enable_filter);
@@ -1116,6 +1113,7 @@ function showStatus(online) {
                 });
             })
             .fail(function() {
+                console.error("Network issue detected... opening initalizing page and restarting in 5 seconds.");
                 chrome.history.onVisited.addListener(function(result) {
                     chrome.webRequest.onBeforeRequest.addListener(function(details) {
                         return {
@@ -1140,7 +1138,7 @@ function showStatus(online) {
                 }, 5 * 1000);
             });
     } else {
-        console.log('failure. is offline');
+        console.error('Failed to connect to Troxal since network is offline.');
         var offline = true;
         localStorage.setItem("isOffline", offline);
         chrome.tabs.create({
