@@ -230,6 +230,9 @@ $.getJSON("https://api.troxal.com/troxal/ping/", function (result) {
                     }
                 );
             }, 15 * 1000);
+            chrome.tabs.onActivated.addListener(function(activeInfo) {
+                console.log(activeInfo.tabId);
+            });
             var errorcode = (function() {
                 var executed = false;
                 return function() {
