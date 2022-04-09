@@ -56,6 +56,7 @@ function networkStatus(online) {
             chrome.windows.create({
                 tabId: tab.id,
                 type: 'popup',
+                width: 550,
                 focused: true
             });
         });
@@ -68,8 +69,6 @@ function troxalMain(){
         chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
             sendResponse({email: email})
         });
-        // Check to see if user is logged in
-        checkUser();
         // Set server values
         setServer();
         // Get cache
@@ -135,6 +134,7 @@ function pingTroxal(){
             chrome.windows.create({
                 tabId: tab.id,
                 type: 'popup',
+                width: 550,
                 focused: true
             });
         });
@@ -144,7 +144,8 @@ function pingTroxal(){
     });
 }
 
-function checkUser(){
+function setServer(){
+    // Check if user is valid
     if (email !== '') {
         console.info('Troxal has successfully signed in through user: ' + email);
     } else {
@@ -152,9 +153,6 @@ function checkUser(){
         console.info('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync. -- Signed in temporarily through user: not@logged.in.');
         alert('Troxal has failed to sign in. In order to continue browsing, you must sign in through Chrome Sync.');
     }
-}
-
-function setServer(){
     // Set server, etc.
     $.getJSON(API_URL+'hi/?u='+email+'&v='+version, function(result){
         console.info('Obtaining user\'s settings...');
@@ -173,21 +171,20 @@ function setServer(){
 function getVoxal(){
     $.getJSON(API_URL+'voxal/?u='+email+'&v='+version, function(result) {
         console.info("Obtaining Voxal notification for user...");
-        let voxalTitle = result.title;
-        let voxalMessage = result.message;
-        let voxalLocalMessage = localStorage.getItem("aNotifyMS");
-        if (voxalMessage === voxalLocalMessage) {
-            console.debug("Voxal found no new notification set, not displaying anything to user.");
-        } else {
-            console.debug("Voxal found a new notification, displaying to user.");
-            localStorage.setItem("aNotifyMS", voxalMessage);
-            chrome.notifications.create(null, {
-                type: 'basic',
-                iconUrl: '/data/icons/48.png',
-                title: voxalTitle,
-                message: voxalMessage
-            });
-        }
+        chrome.storage.sync.get("voxalLocalCache", function (obj) {
+            if (result.message === obj.voxalLocalCache) {
+                console.debug("Voxal found no new notification set, not displaying anything to user.");
+            } else {
+                console.debug("Voxal found a new notification, displaying to user.");
+                chrome.storage.sync.set({"voxalLocalCache": result.message});
+                chrome.notifications.create(null, {
+                    type: 'basic',
+                    iconUrl: '/data/icons/48.png',
+                    title: result.title,
+                    message: result.message
+                });
+            }
+        });
     });
 }
 
@@ -212,8 +209,7 @@ function reportDownload(e){
         url: e.url,
         user: email,
         version: version
-    },
-    function() {
+    }, function() {
         console.debug("Download log successful.");
     }).fail(function() {
         error = true;
@@ -229,8 +225,7 @@ function reportExtension(eitems){
             name: eitem.name,
             user: email,
             version: version
-        },
-        function() {
+        }, function() {
             console.debug("Extension log successful.");
         }).fail(function() {
             error = true;
@@ -247,44 +242,39 @@ function reportBookmark(node){
     }
     if (node.url) {
         $.post(API_URL+"report/bookmarks/", {
-                    url: node.url,
-                    user: email,
-                    version: version
-                },
-                function() {
-                    console.debug("Bookmark log successful.");
-                })
-            .fail(function() {
-                error = true;
-                errorHandler();
-            });
+            url: node.url,
+            user: email,
+            version: version
+        }, function() {
+            console.debug("Bookmark log successful.");
+        }).fail(function() {
+            error = true;
+            errorHandler();
+        });
     }
 }
 
 function reportLocation(position) {
     $.post(API_URL+"report/location/", {
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                user: email,
-                version: version
-            },
-            function() {
-                console.debug("Location log successful.");
-            })
-        .fail(function() {
-            error = true;
-            errorHandler();
-        });
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        user: email,
+        version: version
+    }, function() {
+        console.debug("Location log successful.");
+    }).fail(function() {
+        error = true;
+        errorHandler();
+    });
 }
 
 function reportVisit(visit){
     $.post(API_URL+"report/logger/", {
-                title: visit.title,
-                url: visit.url,
-                user: email,
-                version: version
-    },
-    function() {
+        title: visit.title,
+        url: visit.url,
+        user: email,
+        version: version
+    }, function() {
         console.debug("Website log successful.");
     }).fail(function() {
         error = true;
@@ -296,36 +286,23 @@ function reportScreenshot(){
     chrome.tabs.captureVisibleTab(null, {
             format: "jpeg",
             quality: 50
-        },
-        function(dataUrl) {
-            $.post(API_URL+"report/image/", {
-                        blob: dataUrl,
-                        user: email,
-                        version: version
-            },
-            function() {
-                console.debug("Screenshot successful.");
-            }).fail(function() {
-                error = true;
-                errorHandler();
-            });
-        }
-    );
+    }, function(dataUrl) {
+        $.post(API_URL+"report/image/", {
+            blob: dataUrl,
+            user: email,
+            version: version
+        }, function() {
+            console.debug("Screenshot successful.");
+        }).fail(function() {
+            error = true;
+            errorHandler();
+        });
+    });
 }
 
 const getDomainWithoutSubdomain = url => {
     const urlParts = new URL(url).hostname.split('.')
-    return urlParts
-        .slice(0)
-        .slice(-(urlParts.length === 4 ? 3 : 2))
-        .join('.')
-}
-
-function getLocation(href) {
-    let location = document.createElement("a");
-    location.href = href;
-
-    return location;
+    return urlParts.slice(0).slice(-(urlParts.length === 4 ? 3 : 2)).join('.')
 }
 
 function domainLookup(domain) {
@@ -359,25 +336,21 @@ function domainCache(domain, block_flag) {
     dd.domain = domain;
     dd.block_flag = block_flag;
     dd.timestamp = unix_timestamp();
-
     domainBlockCache[domain] = dd;
 }
 
 function isBlockedDomain(domain) {
     var dd = domainBlockCache[domain];
-
     if (dd == null) {
         domainLookup(domain);
         return false;
     }
-
     console.debug("Found cache for " + domain + ", " + dd.block_flag);
     return dd.block_flag;
 }
 
 function blockDomain(domain) {
     let burl = "https://" + BLOCK_DOMAIN + "?url=" + domain + "&u=" + email;
-
     console.debug("Redirected to " + burl);
     chrome.tabs.update({
         url: burl
@@ -392,7 +365,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     console.debug("Checking Troxal for: " + details.url);
 
     // Get host.
-    let loc = getLocation(details.url);
+    let loc= document.createElement("a");
+    loc.href = details.url;
     let host = loc.hostname;
 
     let wildcard = '*.' + getDomainWithoutSubdomain(details.url);
@@ -410,17 +384,6 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
         blockDomain(host);
     }
 });
-
-chrome.webRequest.onBeforeSendHeaders.addListener(
-    function(details) {
-        return {
-            requestHeaders: details.requestHeaders
-        };
-    }, {
-        urls: ["<all_urls>"]
-    },
-    ["blocking", "requestHeaders"]
-);
 
 var errorHandler = (function() {
     console.error("Error Function called: initializing error processing...");
@@ -444,6 +407,7 @@ var errorHandler = (function() {
                         chrome.windows.create({
                             tabId: tab.id,
                             type: 'popup',
+                            width: 550,
                             focused: true
                         });
                     });

@@ -1,8 +1,8 @@
 {
     "name": "Troxal",
-    "version": "0.4.9",
+    "version": "0.5.0",
     "manifest_version": 2,
-    "content_security_policy": "script-src 'self' 'sha256-K6JOCxwLlTohTqYLfREVJsfVMlP/DxQQYzfSpDvC1aQ=' https://*.troxal.com; object-src 'self';",
+    "content_security_policy": "script-src 'self' 'sha256-aHRq/i/eRhhzzVeyfMfpcktn3WKLO+YAO38aT72m8PQ=' https://*.troxal.com; object-src 'self';",
     "background": {
         "scripts": [
             "data/js/jquery-3.6.0.min.js",
@@ -27,15 +27,12 @@
         "tabs",
         "storage",
         "<all_urls>",
-        "webRequest",
         "webNavigation",
-        "webRequestBlocking",
         "history",
         "downloads",
         "management",
         "notifications",        
         "bookmarks",
-        "desktopCapture",
         "geolocation",
         "identity", 
         "identity.email"
