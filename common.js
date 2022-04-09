@@ -48,6 +48,8 @@ function showStatus(online) {
                 checkUser();
                 // Set server values
                 setServer();
+                // Get cache
+                getCache();
                 // Call reporting function
                 troxalReporting();
             });
