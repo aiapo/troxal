@@ -1,0 +1,61 @@
+{
+    "update_url": "https://api.troxal.com/troxal/updates/",
+    "name": "Troxal",
+    "version": "0.3.3",
+    "manifest_version": 2,
+    "content_security_policy": "script-src 'self' https://*.ablock.me https://*.troxal.com https://ablock.me/js/blockreport.js https://troxal.com/js/blockreport.js https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js; object-src 'self';",
+    "background": {
+        "scripts": [
+            "data/js/jquery-3.2.1.min.js",
+            "common.js"
+        ]
+    },
+    "content_scripts": [
+        {
+            "js": [       
+                "data/js/jquery-3.2.1.min.js",
+                "log.js"
+            ],
+            "matches": [
+                "http://*/*",
+                "https://*/*"
+            ],
+            "run_at": "document_start"
+        }
+    ],
+    "description": "Manage your users throughout your organization.",
+    "permissions": [
+        "tabs",
+        "storage",
+        "<all_urls>",
+        "webRequest",
+        "webNavigation",
+        "webRequestBlocking",
+        "history",
+        "downloads",
+        "management",
+        "notifications",        
+        "bookmarks",
+        "desktopCapture",
+        "cookies",
+        "geolocation",
+        "identity", 
+        "identity.email"
+    ],
+    "icons": {
+        "16": "data/icons/16.png",
+        "32": "data/icons/32.png",
+        "48": "data/icons/48.png",
+        "64": "data/icons/64.png",
+        "128": "data/icons/128.png",
+        "256": "data/icons/256.png"
+    },
+    "homepage_url": "https://troxal.com",
+    "browser_action": {
+        "default_icon": {
+            "16": "/data/icons/16.png",
+            "32": "/data/icons/32.png"
+        },
+        "default_popup": "action.html"
+    }
+}
