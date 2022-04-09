@@ -9,7 +9,7 @@
     <body>
         <div id="load">
 <h1>Troxal can't find your network...</h1>
-<h2>If you see this, Troxal can't reach our servers just yet due to a network issue. Just give us a few seconds and we should be good!</h2>
+<h2>If you see this, Troxal can't reach our servers just yet due to a network issue. Just give us a few seconds, and we should be good!</h2>
 <div class="showbox">
   <div class="loader">
     <svg class="circular" viewBox="25 25 50 50">
@@ -23,10 +23,10 @@
 <script>
 setInterval(function () {
     var winclose = localStorage.getItem('isOffline');
-    if (winclose == 'false'){
+    if (winclose === 'false'){
         open(location, '_self').close(); 
     }
-}, 1 * 1000);    
+}, 1000);
 </script>
 </body>
 </html>

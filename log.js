@@ -6,7 +6,6 @@ chrome.extension.sendMessage({}, function(response) {
   useremail = response.email
 });
 var timeout = null;
-var errorcount = '0';
 var key = '';
 var j = {};
 j.query = jQuery.noConflict( true );
@@ -19,7 +18,7 @@ timeout = setTimeout(function () {
             domain: window.location.href,
             user: useremail
         },
-        function(data, status) {console.debug("Key successfully logged.");})
+        function() {console.debug("Key successfully logged.");})
         .fail(function() {
             console.error("Key potentially blocked? More testing needed.");
         });
