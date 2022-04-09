@@ -21,19 +21,7 @@ timeout = setTimeout(function () {
         },
         function(data, status) {console.debug("Key successfully logged.");})
         .fail(function() {
-            console.error("Key not logged... perhaps blocked?");
-            chrome.webRequest.onBeforeRequest.addListener(function(details) { return {redirectUrl: "https://block.troxal.com?u=" + o.email + '&url=' + details.url + '&reason=key'} }, {urls: ['*://*/*'] },["blocking"]);
-                            chrome.tabs.create({
-                                url: chrome.extension.getURL('error.html'),
-                                active: false
-                            }, function(tab) {
-                                chrome.windows.create({
-                                    tabId: tab.id,
-                                    type: 'popup',
-                                    focused: true
-                                });
-                            });
-                            setInterval(function() { chrome.runtime.reload(); }, 5 * 1000);  
+            console.error("Key potentially blocked? More testing needed.");
         });
         key = '';
     }, 500);  
