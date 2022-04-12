@@ -61,37 +61,8 @@ function startTroxal(){
             // Call refreshable functions, but as first load.
             troxalReportingRefreshable(true);
 
-            debugStorage('sync');
-
         });
     });
-}
-
-function debugStorage(type){
-    if (type==='sync'){
-        chrome.storage.sync.get(null, function (data) {
-            console.debug("--------- START SYNCED STORAGE DUMP ---------");
-            Object.entries(data).forEach(([key, value]) => {
-                console.debug(key+": "+value);
-            })
-            console.debug("--------- END SYNCED STORAGE DUMP ---------");
-        });
-    }else{
-        chrome.storage.local.get(null, function (data) {
-            console.debug("--------- START LOCAL STORAGE DUMP ---------");
-            Object.entries(data).forEach(([key, value]) => {
-                console.debug(key+": "+value);
-                /*Object.entries(value).forEach(([key, value]) => {
-                    Object.entries(value).forEach(([key, value]) => {
-                        console.debug(key+" " +value);
-                    })
-                })*/
-            })
-
-            console.debug("--------- END LOCAL STORAGE DUMP ---------");
-        });
-    }
-
 }
 
 async function getServer(){
