@@ -109,7 +109,6 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     let url = details.url;
     let urlParts = /^(?:\w+\:\/\/)?([^\/]+)([^\?]*)\??(.*)$/.exec(url);
     let host = "https://"+urlParts[1];
-    console.debug(host);
     console.debug("Checking Troxal for: " + host);
     let wildcard = 'https://*.' + getDomainWithoutSubdomain(host);
 
