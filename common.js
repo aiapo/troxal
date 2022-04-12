@@ -106,7 +106,10 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     if (!str_starts_with(details.url, "http:") && !str_starts_with(details.url, "https:")) {
         return;
     }
-    let host = details.url;
+    let url = details.url;
+    let urlParts = /^(?:\w+\:\/\/)?([^\/]+)([^\?]*)\??(.*)$/.exec(url);
+    let host = "https://"+urlParts[1];
+    console.debug(host);
     console.debug("Checking Troxal for: " + host);
     let wildcard = 'https://*.' + getDomainWithoutSubdomain(host);
 
@@ -327,7 +330,7 @@ const getDomainWithoutSubdomain = url => {
 }
 
 async function domainLookup(domain) {
-    let url = API_URL+"check/v2/?domain="+domain+"&uname="+email+"&v="+version;
+    let url = API_URL+"check/v2/?uname="+email+"&v="+version+"&domain="+domain;
     try {
         let res = await fetch(url);
         return await res.json();
