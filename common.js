@@ -61,37 +61,8 @@ function startTroxal(){
             // Call refreshable functions, but as first load.
             troxalReportingRefreshable(true);
 
-            debugStorage('sync');
-
         });
     });
-}
-
-function debugStorage(type){
-    if (type==='sync'){
-        chrome.storage.sync.get(null, function (data) {
-            console.debug("--------- START SYNCED STORAGE DUMP ---------");
-            Object.entries(data).forEach(([key, value]) => {
-                console.debug(key+": "+value);
-            })
-            console.debug("--------- END SYNCED STORAGE DUMP ---------");
-        });
-    }else{
-        chrome.storage.local.get(null, function (data) {
-            console.debug("--------- START LOCAL STORAGE DUMP ---------");
-            Object.entries(data).forEach(([key, value]) => {
-                console.debug(key+": "+value);
-                /*Object.entries(value).forEach(([key, value]) => {
-                    Object.entries(value).forEach(([key, value]) => {
-                        console.debug(key+" " +value);
-                    })
-                })*/
-            })
-
-            console.debug("--------- END LOCAL STORAGE DUMP ---------");
-        });
-    }
-
 }
 
 async function getServer(){
@@ -135,7 +106,9 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     if (!str_starts_with(details.url, "http:") && !str_starts_with(details.url, "https:")) {
         return;
     }
-    let host = details.url;
+    let url = details.url;
+    let urlParts = /^(?:\w+\:\/\/)?([^\/]+)([^\?]*)\??(.*)$/.exec(url);
+    let host = "https://"+urlParts[1];
     console.debug("Checking Troxal for: " + host);
     let wildcard = 'https://*.' + getDomainWithoutSubdomain(host);
 
@@ -356,7 +329,7 @@ const getDomainWithoutSubdomain = url => {
 }
 
 async function domainLookup(domain) {
-    let url = API_URL+"check/v2/?domain="+domain+"&uname="+email+"&v="+version;
+    let url = API_URL+"check/v2/?uname="+email+"&v="+version+"&domain="+domain;
     try {
         let res = await fetch(url);
         return await res.json();
