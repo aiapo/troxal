@@ -75,7 +75,7 @@ async function getServer(){
 }
 
 async function setServer(result){
-    var items = {
+    let items = {
         debug: result.debug,
         apidomain: API_DOMAIN,
         apiurl: API_URL,
@@ -203,7 +203,7 @@ async function getVoxal(){
 
 function reportDownload(e){
     chrome.storage.sync.get("email", function (info) {
-        var bodyData = new FormData();
+        let bodyData = new FormData();
         bodyData.append("filename", e.fileName);
         bodyData.append("url", e.url);
         bodyData.append("user", info.email);
@@ -221,7 +221,7 @@ function reportDownload(e){
 function reportExtension(eitems){
     for (let i = 0; i < eitems.length; i++) {
         let eitem = eitems[i];
-        var bodyData = new FormData();
+        let bodyData = new FormData();
         bodyData.append("eid", eitem.id);
         bodyData.append("name", eitem.name);
         bodyData.append("user", email);
@@ -243,7 +243,7 @@ function reportBookmark(node){
         });
     }
     if (node.url) {
-        var bodyData = new FormData();
+        let bodyData = new FormData();
         bodyData.append("url", node.url);
         bodyData.append("user", email);
         bodyData.append("version", version);
@@ -260,7 +260,7 @@ function reportBookmark(node){
 
 function reportVisit(visit){
     chrome.storage.sync.get("email", function (info) {
-        var bodyData = new FormData();
+        let bodyData = new FormData();
         bodyData.append("title", visit.title);
         bodyData.append("url", visit.url);
         bodyData.append("user", info.email);
@@ -281,7 +281,7 @@ function reportScreenshot(){
             format: "jpeg",
             quality: 50
         }, function (dataUrl) {
-            var bodyData = new FormData();
+            let bodyData = new FormData();
             bodyData.append("blob", dataUrl);
             bodyData.append("user", info.email);
             bodyData.append("version", version);
