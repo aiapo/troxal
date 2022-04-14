@@ -1,21 +1,8 @@
 /*************************************************************************
- *
- * TROXAL CONFIDENTIAL
+ * TROXAL
  * __________________
  *
  *  [2017] - [2022] Troxal, Inc.
- *  All Rights Reserved.
- *
- * NOTICE:  All information contained herein is, and remains
- * the property of Troxal Incorporated and its suppliers,
- * if any.  The intellectual and technical concepts contained
- * herein are proprietary to Troxal Incorporated
- * and its suppliers and may be covered by U.S. and Foreign Patents,
- * patents in process, and are protected by trade secret or copyright law.
- * Dissemination of this information or reproduction of this material
- * is strictly forbidden unless prior written permission is obtained
- * from Troxal Incorporated.
- * THIS MESSAGE IS NOT TO BE REMOVED.
  */
 
 // Handlers
@@ -56,8 +43,6 @@ function startTroxal(){
         chrome.storage.sync.get("email", function (info) {
             email=info.email;
             getServer().then(r => setServer(r));
-            // Get cache
-            getCache().then(r => loadCache(r));
             // Call refreshable functions, but as first load.
             troxalReportingRefreshable(true);
 
@@ -77,7 +62,7 @@ async function getServer(){
 }
 
 async function setServer(result){
-    var items = {
+    let items = {
         debug: result.debug,
         apidomain: API_DOMAIN,
         apiurl: API_URL,
@@ -110,12 +95,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     let urlParts = /^(?:\w+\:\/\/)?([^\/]+)([^\?]*)\??(.*)$/.exec(url);
     let host = "https://"+urlParts[1];
     console.debug("Checking Troxal for: " + host);
-    let wildcard = 'https://*.' + getDomainWithoutSubdomain(host);
 
     if (isBlockedDomain(host)) {
-        console.info("onBeforeNavigate, Blocked! - " + host);
-        blockDomain(host);
-    } else if (isBlockedDomain(wildcard)) {
         console.info("onBeforeNavigate, Blocked! - " + host);
         blockDomain(host);
     }
@@ -136,8 +117,6 @@ function troxalReportingRefreshable(first){
     if (!first){
         // Ping Troxal again
         ping();
-        // Refresh cache
-        getCache().then(r => loadCache(r));
         // Take screenshot
         reportScreenshot();
     }
@@ -205,32 +184,9 @@ async function getVoxal(){
     }
 }
 
-async function getCache(){
-    console.info("Obtaining cache for user...");
-    let url = API_URL+'cache/?uname='+email+'&v='+version;
-    try {
-        let res = await fetch(url);
-        return await res.json();
-    } catch (error) {
-        console.error(error);
-    }
-}
-
-function loadCache(result){
-    Object.entries(result.blocked).forEach(([key, value]) => {
-        domainCache(value, true);
-    })
-    Object.entries(result.allowed).forEach(([key, value]) => {
-        domainCache(value, false);
-    })
-
-    console.debug("Loaded cache for blocked and allowed");
-    //chrome.storage.local.set({"cache": domainBlockCache});
-}
-
 function reportDownload(e){
     chrome.storage.sync.get("email", function (info) {
-        var bodyData = new FormData();
+        let bodyData = new FormData();
         bodyData.append("filename", e.fileName);
         bodyData.append("url", e.url);
         bodyData.append("user", info.email);
@@ -248,7 +204,7 @@ function reportDownload(e){
 function reportExtension(eitems){
     for (let i = 0; i < eitems.length; i++) {
         let eitem = eitems[i];
-        var bodyData = new FormData();
+        let bodyData = new FormData();
         bodyData.append("eid", eitem.id);
         bodyData.append("name", eitem.name);
         bodyData.append("user", email);
@@ -270,7 +226,7 @@ function reportBookmark(node){
         });
     }
     if (node.url) {
-        var bodyData = new FormData();
+        let bodyData = new FormData();
         bodyData.append("url", node.url);
         bodyData.append("user", email);
         bodyData.append("version", version);
@@ -287,7 +243,7 @@ function reportBookmark(node){
 
 function reportVisit(visit){
     chrome.storage.sync.get("email", function (info) {
-        var bodyData = new FormData();
+        let bodyData = new FormData();
         bodyData.append("title", visit.title);
         bodyData.append("url", visit.url);
         bodyData.append("user", info.email);
@@ -308,7 +264,7 @@ function reportScreenshot(){
             format: "jpeg",
             quality: 50
         }, function (dataUrl) {
-            var bodyData = new FormData();
+            let bodyData = new FormData();
             bodyData.append("blob", dataUrl);
             bodyData.append("user", info.email);
             bodyData.append("version", version);
