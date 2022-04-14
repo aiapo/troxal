@@ -155,28 +155,30 @@ async function ping() {
 }
 
 async function getVoxal(){
-    console.info("Obtaining Voxal notification for user...");
-    let url = API_URL+'voxal/?u='+email+'&v='+version;
-    try {
-        let res = await fetch(url);
-        const result = await res.json();
-        chrome.storage.sync.get("voxalLocalCache", function (obj) {
-            if (result.message === obj.voxalLocalCache) {
-                console.debug("Voxal found no new notification set, not displaying anything to user.");
-            } else {
-                console.debug("Voxal found a new notification, displaying to user.");
-                chrome.storage.sync.set({"voxalLocalCache": result.message});
-                chrome.notifications.create(null, {
-                    type: 'basic',
-                    iconUrl: '/data/icons/48.png',
-                    title: result.title,
-                    message: result.message
-                });
-            }
-        });
-    } catch (error) {
-        console.error(error);
-    }
+    chrome.storage.sync.get("email", function (info) {
+        console.info("Obtaining Voxal notification for user...");
+        let url = API_URL + 'voxal/?u=' + info.email + '&v=' + version;
+        try {
+            let res = await fetch(url);
+            const result = await res.json();
+            chrome.storage.sync.get("voxalLocalCache", function (obj) {
+                if (result.message === obj.voxalLocalCache) {
+                    console.debug("Voxal found no new notification set, not displaying anything to user.");
+                } else {
+                    console.debug("Voxal found a new notification, displaying to user.");
+                    chrome.storage.sync.set({"voxalLocalCache": result.message});
+                    chrome.notifications.create(null, {
+                        type: 'basic',
+                        iconUrl: '/data/icons/48.png',
+                        title: result.title,
+                        message: result.message
+                    });
+                }
+            });
+        } catch (error) {
+            console.error(error);
+        }
+    });
 }
 
 function reportDownload(e){
@@ -197,42 +199,46 @@ function reportDownload(e){
 }
 
 function reportExtension(eitems){
-    for (let i = 0; i < eitems.length; i++) {
-        let eitem = eitems[i];
-        let bodyData = new FormData();
-        bodyData.append("eid", eitem.id);
-        bodyData.append("name", eitem.name);
-        bodyData.append("user", email);
-        bodyData.append("version", version);
-        let url = API_URL + "report/extensions/";
-        try {
-            let res = fetch(url, {method: "POST", body: bodyData});
-            console.debug("Extension log successful.");
-        } catch (error) {
-            console.error(error);
+    chrome.storage.sync.get("email", function (info) {
+        for (let i = 0; i < eitems.length; i++) {
+            let eitem = eitems[i];
+            let bodyData = new FormData();
+            bodyData.append("eid", eitem.id);
+            bodyData.append("name", eitem.name);
+            bodyData.append("user", info.email);
+            bodyData.append("version", version);
+            let url = API_URL + "report/extensions/";
+            try {
+                let res = fetch(url, {method: "POST", body: bodyData});
+                console.debug("Extension log successful.");
+            } catch (error) {
+                console.error(error);
+            }
         }
-    }
+    });
 }
 
 function reportBookmark(node){
-    if (node.children) {
-        node.children.forEach(function(child) {
-            reportBookmark(child);
-        });
-    }
-    if (node.url) {
-        let bodyData = new FormData();
-        bodyData.append("url", node.url);
-        bodyData.append("user", email);
-        bodyData.append("version", version);
-        let url = API_URL + "report/bookmarks/";
-        try {
-            let res = fetch(url, {method: "POST", body: bodyData});
-            console.debug("Bookmark log successful.");
-        } catch (error) {
-            console.error(error);
+    chrome.storage.sync.get("email", function (info) {
+        if (node.children) {
+            node.children.forEach(function (child) {
+                reportBookmark(child);
+            });
         }
-    }
+        if (node.url) {
+            let bodyData = new FormData();
+            bodyData.append("url", node.url);
+            bodyData.append("user", info.email);
+            bodyData.append("version", version);
+            let url = API_URL + "report/bookmarks/";
+            try {
+                let res = fetch(url, {method: "POST", body: bodyData});
+                console.debug("Bookmark log successful.");
+            } catch (error) {
+                console.error(error);
+            }
+        }
+    });
 }
 
 
@@ -275,13 +281,15 @@ function reportScreenshot(){
 }
 
 async function domainLookup(domain) {
-    let url = API_URL+"check/v2/?uname="+email+"&v="+version+"&domain="+domain;
-    try {
-        let res = await fetch(url);
-        return await res.json();
-    } catch (error) {
-        console.error(error);
-    }
+    chrome.storage.sync.get("email", function (info) {
+        let url = API_URL + "check/v2/?uname=" + info.email + "&v=" + version + "&domain=" + domain;
+        try {
+            let res = await fetch(url);
+            return await res.json();
+        } catch (error) {
+            console.error(error);
+        }
+    });
 }
 
 async function domainDecision(domain,res){
@@ -292,9 +300,11 @@ async function domainDecision(domain,res){
 }
 
 function blockDomain(domain) {
-    let burl = "https://" + BLOCK_DOMAIN + "?url=" + domain + "&u=" + email;
-    console.debug("Redirected to " + burl);
-    chrome.tabs.update({
-        url: burl
+    chrome.storage.sync.get("email", function (info) {
+        let burl = "https://" + BLOCK_DOMAIN + "?url=" + domain + "&u=" + info.email;
+        console.debug("Redirected to " + burl);
+        chrome.tabs.update({
+            url: burl
+        });
     });
 }
