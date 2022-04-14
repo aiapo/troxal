@@ -56,8 +56,6 @@ function startTroxal(){
         chrome.storage.sync.get("email", function (info) {
             email=info.email;
             getServer().then(r => setServer(r));
-            // Get cache
-            getCache().then(r => loadCache(r));
             // Call refreshable functions, but as first load.
             troxalReportingRefreshable(true);
 
@@ -136,8 +134,6 @@ function troxalReportingRefreshable(first){
     if (!first){
         // Ping Troxal again
         ping();
-        // Refresh cache
-        getCache().then(r => loadCache(r));
         // Take screenshot
         reportScreenshot();
     }
@@ -203,29 +199,6 @@ async function getVoxal(){
     } catch (error) {
         console.error(error);
     }
-}
-
-async function getCache(){
-    console.info("Obtaining cache for user...");
-    let url = API_URL+'cache/?uname='+email+'&v='+version;
-    try {
-        let res = await fetch(url);
-        return await res.json();
-    } catch (error) {
-        console.error(error);
-    }
-}
-
-function loadCache(result){
-    Object.entries(result.blocked).forEach(([key, value]) => {
-        domainCache(value, true);
-    })
-    Object.entries(result.allowed).forEach(([key, value]) => {
-        domainCache(value, false);
-    })
-
-    console.debug("Loaded cache for blocked and allowed");
-    //chrome.storage.local.set({"cache": domainBlockCache});
 }
 
 function reportDownload(e){
