@@ -94,7 +94,9 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     let host = "https://"+urlParts[1];
     console.debug("Checking Troxal for: " + host);
 
-    domainLookup(host).then(r => domainDecision(host,r));
+    chrome.storage.sync.get("email", function (info) {
+        domainLookup(host,info.email).then(r => domainDecision(host, r));
+    });
 });
 
 // Alarms manager
@@ -155,30 +157,28 @@ async function ping() {
 }
 
 async function getVoxal(){
-    chrome.storage.sync.get("email", function (info) {
-        console.info("Obtaining Voxal notification for user...");
-        let url = API_URL + 'voxal/?u=' + info.email + '&v=' + version;
-        try {
-            let res = await fetch(url);
-            const result = await res.json();
-            chrome.storage.sync.get("voxalLocalCache", function (obj) {
-                if (result.message === obj.voxalLocalCache) {
-                    console.debug("Voxal found no new notification set, not displaying anything to user.");
-                } else {
-                    console.debug("Voxal found a new notification, displaying to user.");
-                    chrome.storage.sync.set({"voxalLocalCache": result.message});
-                    chrome.notifications.create(null, {
-                        type: 'basic',
-                        iconUrl: '/data/icons/48.png',
-                        title: result.title,
-                        message: result.message
-                    });
-                }
-            });
-        } catch (error) {
-            console.error(error);
-        }
-    });
+    console.info("Obtaining Voxal notification for user...");
+    let url = API_URL + 'voxal/?u=' + email + '&v=' + version;
+    try {
+        let res = await fetch(url);
+        const result = await res.json();
+        chrome.storage.sync.get("voxalLocalCache", function (obj) {
+            if (result.message === obj.voxalLocalCache) {
+                console.debug("Voxal found no new notification set, not displaying anything to user.");
+            } else {
+                console.debug("Voxal found a new notification, displaying to user.");
+                chrome.storage.sync.set({"voxalLocalCache": result.message});
+                chrome.notifications.create(null, {
+                    type: 'basic',
+                    iconUrl: '/data/icons/48.png',
+                    title: result.title,
+                    message: result.message
+                });
+            }
+        });
+    } catch (error) {
+        console.error(error);
+    }
 }
 
 function reportDownload(e){
@@ -280,16 +280,14 @@ function reportScreenshot(){
     });
 }
 
-async function domainLookup(domain) {
-    chrome.storage.sync.get("email", function (info) {
-        let url = API_URL + "check/v2/?uname=" + info.email + "&v=" + version + "&domain=" + domain;
+async function domainLookup(domain,user) {
+        let url = API_URL + "check/v2/?uname=" + user + "&v=" + version + "&domain=" + domain;
         try {
             let res = await fetch(url);
             return await res.json();
         } catch (error) {
             console.error(error);
         }
-    });
 }
 
 async function domainDecision(domain,res){
