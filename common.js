@@ -95,12 +95,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     let urlParts = /^(?:\w+\:\/\/)?([^\/]+)([^\?]*)\??(.*)$/.exec(url);
     let host = "https://"+urlParts[1];
     console.debug("Checking Troxal for: " + host);
-    let wildcard = 'https://*.' + getDomainWithoutSubdomain(host);
 
     if (isBlockedDomain(host)) {
-        console.info("onBeforeNavigate, Blocked! - " + host);
-        blockDomain(host);
-    } else if (isBlockedDomain(wildcard)) {
         console.info("onBeforeNavigate, Blocked! - " + host);
         blockDomain(host);
     }
