@@ -1,6 +1,6 @@
 {
     "name": "Troxal",
-    "version": "0.5.3",
+    "version": "0.5.4",
     "manifest_version": 3,
     "content_security_policy": {
         "extension_pages": "script-src 'self'; object-src 'self';"
