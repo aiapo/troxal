@@ -13,8 +13,6 @@ const API_DOMAIN = "api.troxal.com";
 const BLOCK_DOMAIN = "block.troxal.com";
 const API_URL = "https://" + API_DOMAIN + "/troxal/";
 const QUERY_TIMEOUT = 6;
-var domainBlockCache = {};
-
 
 //TODO: run on startup
 console.info("Initializing Troxal "+ version +"... signing in now...");
@@ -96,10 +94,9 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     let host = "https://"+urlParts[1];
     console.debug("Checking Troxal for: " + host);
 
-    if (isBlockedDomain(host)) {
-        console.info("onBeforeNavigate, Blocked! - " + host);
-        blockDomain(host);
-    }
+    chrome.storage.sync.get("email", function (info) {
+        domainLookup(host,info.email).then(r => domainDecision(host, r));
+    });
 });
 
 // Alarms manager
@@ -161,7 +158,7 @@ async function ping() {
 
 async function getVoxal(){
     console.info("Obtaining Voxal notification for user...");
-    let url = API_URL+'voxal/?u='+email+'&v='+version;
+    let url = API_URL + 'voxal/?u=' + email + '&v=' + version;
     try {
         let res = await fetch(url);
         const result = await res.json();
@@ -202,42 +199,46 @@ function reportDownload(e){
 }
 
 function reportExtension(eitems){
-    for (let i = 0; i < eitems.length; i++) {
-        let eitem = eitems[i];
-        let bodyData = new FormData();
-        bodyData.append("eid", eitem.id);
-        bodyData.append("name", eitem.name);
-        bodyData.append("user", email);
-        bodyData.append("version", version);
-        let url = API_URL + "report/extensions/";
-        try {
-            let res = fetch(url, {method: "POST", body: bodyData});
-            console.debug("Extension log successful.");
-        } catch (error) {
-            console.error(error);
+    chrome.storage.sync.get("email", function (info) {
+        for (let i = 0; i < eitems.length; i++) {
+            let eitem = eitems[i];
+            let bodyData = new FormData();
+            bodyData.append("eid", eitem.id);
+            bodyData.append("name", eitem.name);
+            bodyData.append("user", info.email);
+            bodyData.append("version", version);
+            let url = API_URL + "report/extensions/";
+            try {
+                let res = fetch(url, {method: "POST", body: bodyData});
+                console.debug("Extension log successful.");
+            } catch (error) {
+                console.error(error);
+            }
         }
-    }
+    });
 }
 
 function reportBookmark(node){
-    if (node.children) {
-        node.children.forEach(function(child) {
-            reportBookmark(child);
-        });
-    }
-    if (node.url) {
-        let bodyData = new FormData();
-        bodyData.append("url", node.url);
-        bodyData.append("user", email);
-        bodyData.append("version", version);
-        let url = API_URL + "report/bookmarks/";
-        try {
-            let res = fetch(url, {method: "POST", body: bodyData});
-            console.debug("Bookmark log successful.");
-        } catch (error) {
-            console.error(error);
+    chrome.storage.sync.get("email", function (info) {
+        if (node.children) {
+            node.children.forEach(function (child) {
+                reportBookmark(child);
+            });
         }
-    }
+        if (node.url) {
+            let bodyData = new FormData();
+            bodyData.append("url", node.url);
+            bodyData.append("user", info.email);
+            bodyData.append("version", version);
+            let url = API_URL + "report/bookmarks/";
+            try {
+                let res = fetch(url, {method: "POST", body: bodyData});
+                console.debug("Bookmark log successful.");
+            } catch (error) {
+                console.error(error);
+            }
+        }
+    });
 }
 
 
@@ -279,53 +280,29 @@ function reportScreenshot(){
     });
 }
 
-const getDomainWithoutSubdomain = url => {
-    const urlParts = new URL(url).hostname.split('.')
-    return urlParts.slice(0).slice(-(urlParts.length === 4 ? 3 : 2)).join('.')
-}
-
-async function domainLookup(domain) {
-    let url = API_URL+"check/v2/?uname="+email+"&v="+version+"&domain="+domain;
-    try {
-        let res = await fetch(url);
-        return await res.json();
-    } catch (error) {
-        console.error(error);
-    }
+async function domainLookup(domain,user) {
+        let url = API_URL + "check/v2/?uname=" + user + "&v=" + version + "&domain=" + domain;
+        try {
+            let res = await fetch(url);
+            return await res.json();
+        } catch (error) {
+            console.error(error);
+        }
 }
 
 async function domainDecision(domain,res){
     console.debug("Site lookup for " + domain + " reports " + res.action);
     if (res.action === "block") {
-        domainCache(domain, true);
         blockDomain(domain);
-    } else {
-        domainCache(domain, false);
     }
-}
-
-function domainCache(domain, block_flag) {
-    let dd = {};
-    dd.domain = domain;
-    dd.block_flag = block_flag;
-    dd.timestamp = unix_timestamp();
-    domainBlockCache[domain] = dd;
-}
-
-function isBlockedDomain(domain) {
-    let dd = domainBlockCache[domain];
-    if (dd == null) {
-        domainLookup(domain).then(r => domainDecision(domain,r));
-        return false;
-    }
-    console.debug("Found cache for " + domain + ", " + dd.block_flag);
-    return dd.block_flag;
 }
 
 function blockDomain(domain) {
-    let burl = "https://" + BLOCK_DOMAIN + "?url=" + domain + "&u=" + email;
-    console.debug("Redirected to " + burl);
-    chrome.tabs.update({
-        url: burl
+    chrome.storage.sync.get("email", function (info) {
+        let burl = "https://" + BLOCK_DOMAIN + "?url=" + domain + "&u=" + info.email;
+        console.debug("Redirected to " + burl);
+        chrome.tabs.update({
+            url: burl
+        });
     });
 }
