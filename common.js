@@ -12,7 +12,6 @@ function get_date14_win(){var n=new Date,t=n.getFullYear(),e=n.getMonth()+1;e<10
 const API_DOMAIN = "api.troxal.com";
 const BLOCK_DOMAIN = "block.troxal.com";
 const API_URL = "https://" + API_DOMAIN + "/troxal/";
-const QUERY_TIMEOUT = 6;
 
 //TODO: run on startup
 console.info("Initializing Troxal "+ version +"... signing in now...");
@@ -42,7 +41,7 @@ function startTroxal(){
             email=info.email;
             getServer().then(r => setServer(r));
             // Call refreshable functions, but as first load.
-            troxalReportingRefreshable(true);
+            troxalReportingRefreshable(true,email);
 
         });
     });
@@ -50,10 +49,18 @@ function startTroxal(){
 
 async function getServer(){
     console.info('Obtaining user\'s settings...');
-    let url = API_URL+'hi/?u='+email+'&v='+version;
+    let bodyData = new FormData();
+    bodyData.append("user", email);
+    bodyData.append("version", version);
+    let url = API_URL + "hi/";
     try {
-        let res = await fetch(url);
-        return await res.json();
+        let res = await fetch(url, {method: "POST", body: bodyData});
+        const result = await res.json();
+        if (result.action === "success") {
+            return await result;
+        }else{
+            responseHandler('server settings lookup',result.action,result.message);
+        }
     } catch (error) {
         console.error(error);
     }
@@ -64,9 +71,9 @@ async function setServer(result){
         debug: result.debug,
         apidomain: API_DOMAIN,
         apiurl: API_URL,
-        blockdomain: BLOCK_DOMAIN,
-        timeout: QUERY_TIMEOUT
+        blockdomain: BLOCK_DOMAIN
     };
+    console.info("User's debug status is set to "+result.debug)
     chrome.storage.sync.set(items, function () {
         console.info('Saved settings to cache.');
     });
@@ -95,87 +102,89 @@ chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
     console.debug("Checking Troxal for: " + host);
 
     chrome.storage.sync.get("email", function (info) {
-        domainLookup(host,info.email).then(r => domainDecision(host, r));
+        domainLookup(host,info.email).then(r => domainDecision(host,r,info.email));
     });
 });
 
 // Alarms manager
 chrome.alarms.onAlarm.addListener(function(alarm) {
     if (alarm.name === 'refreshableFunctions') {
-        troxalReportingRefreshable(false);
+        chrome.storage.sync.get("email", function (info) {
+            troxalReportingRefreshable(false,info.email);
+        });
     }else if(alarm.name === 'screenshotTimer'){
         reportScreenshot();
     }
 });
 
 // Refreshable functions
-function troxalReportingRefreshable(first){
-    // Don't ping or refresh cache on first load
-    if (!first){
+function troxalReportingRefreshable(first,username){
+    // Don't ping or take screenshot on recurring refreshes
+    if (!first) {
         // Ping Troxal again
         ping();
         // Take screenshot
         reportScreenshot();
     }
     // Get Voxal notification
-    getVoxal();
+    getVoxal(username);
     // Call extension reporter on load
-    chrome.management.getAll(function(eitems) {
-        reportExtension(eitems);
+    chrome.management.getAll(function (eitems) {
+        reportExtension(eitems,username);
     });
     // Call bookmark reporter on load
-    chrome.bookmarks.getTree(function(bitemTree) {
-        bitemTree.forEach(function(bitem) {
-            reportBookmark(bitem);
+    chrome.bookmarks.getTree(function (bitemTree) {
+        bitemTree.forEach(function (bitem) {
+            reportBookmark(bitem,username);
         });
     });
 }
 
 async function ping() {
-    let url = API_URL + "ping/?v=" + version;
+    let bodyData = new FormData();
+    bodyData.append("version", version);
+    let url = API_URL + "ping/";
     try {
-        let res = await fetch(url);
+        let res = await fetch(url, {method: "POST", body: bodyData});
         const result = await res.json();
+        if (result.action === "success") {
+            console.info('Troxal successfully reached by pinging')
+            return await result;
+        }else{
+            responseHandler('ping',result.action,result.message);
+        }
     } catch (error) {
         console.error(error);
-        console.error("Network issue detected... opening initializing page and restarting in 5 seconds.");
-        chrome.tabs.create({
-            url:  chrome.runtime.getURL('inital.html'),
-            active: false
-        }, function(tab) {
-            chrome.windows.create({
-                tabId: tab.id,
-                type: 'popup',
-                width: 550,
-                focused: true
-            });
-        });
-        setInterval(function() {
-            chrome.runtime.reload();
-        }, 5 * 1000);
     }
 }
 
-async function getVoxal(){
+async function getVoxal(email){
     console.info("Obtaining Voxal notification for user...");
-    let url = API_URL + 'voxal/?u=' + email + '&v=' + version;
+    let bodyData = new FormData();
+    bodyData.append("username", email);
+    bodyData.append("version", version);
+    let url = API_URL + "voxal/";
     try {
-        let res = await fetch(url);
+        let res = await fetch(url, {method: "POST", body: bodyData});
         const result = await res.json();
-        chrome.storage.sync.get("voxalLocalCache", function (obj) {
-            if (result.message === obj.voxalLocalCache) {
-                console.debug("Voxal found no new notification set, not displaying anything to user.");
-            } else {
-                console.debug("Voxal found a new notification, displaying to user.");
-                chrome.storage.sync.set({"voxalLocalCache": result.message});
-                chrome.notifications.create(null, {
-                    type: 'basic',
-                    iconUrl: '/data/icons/48.png',
-                    title: result.title,
-                    message: result.message
-                });
-            }
-        });
+        if (result.action === "success") {
+            chrome.storage.sync.get("voxalLocalCache", function (obj) {
+                if (result.message === obj.voxalLocalCache) {
+                    console.debug("Voxal found no new notification set, not displaying anything to user.");
+                } else {
+                    console.debug("Voxal found a new notification, displaying to user.");
+                    chrome.storage.sync.set({"voxalLocalCache": result.message});
+                    chrome.notifications.create(null, {
+                        type: 'basic',
+                        iconUrl: '/data/icons/48.png',
+                        title: result.title,
+                        message: result.message
+                    });
+                }
+            });
+        }else{
+            responseHandler('Voxal lookup',result.action,result.message);
+        }
     } catch (error) {
         console.error(error);
     }
@@ -190,55 +199,57 @@ function reportDownload(e){
         bodyData.append("version", version);
         let url = API_URL + "report/downloads/";
         try {
-            let res = fetch(url, {method: "POST", body: bodyData});
-            console.debug("Download log successful.");
+            fetch(url, {
+                method: "POST",
+                body: bodyData
+            }).then(res => res.json()).then(json => responseHandler('download log', json.action, json.message));
         } catch (error) {
             console.error(error);
         }
     });
 }
 
-function reportExtension(eitems){
-    chrome.storage.sync.get("email", function (info) {
-        for (let i = 0; i < eitems.length; i++) {
-            let eitem = eitems[i];
-            let bodyData = new FormData();
-            bodyData.append("eid", eitem.id);
-            bodyData.append("name", eitem.name);
-            bodyData.append("user", info.email);
-            bodyData.append("version", version);
-            let url = API_URL + "report/extensions/";
-            try {
-                let res = fetch(url, {method: "POST", body: bodyData});
-                console.debug("Extension log successful.");
-            } catch (error) {
-                console.error(error);
-            }
+function reportExtension(eitems,email){
+    for (let i = 0; i < eitems.length; i++) {
+        let eitem = eitems[i];
+        let bodyData = new FormData();
+        bodyData.append("eid", eitem.id);
+        bodyData.append("name", eitem.name);
+        bodyData.append("user", email);
+        bodyData.append("version", version);
+        let url = API_URL + "report/extensions/";
+        try {
+            fetch(url, {
+                method: "POST",
+                body: bodyData
+            }).then(res => res.json()).then(json => responseHandler('extension log', json.action, json.message));
+        } catch (error) {
+            console.error(error);
         }
-    });
+    }
 }
 
-function reportBookmark(node){
-    chrome.storage.sync.get("email", function (info) {
-        if (node.children) {
-            node.children.forEach(function (child) {
-                reportBookmark(child);
-            });
+function reportBookmark(node,username){
+    if (node.children) {
+        node.children.forEach(function (child) {
+            reportBookmark(child,username);
+        });
+    }
+    if (node.url) {
+        let bodyData = new FormData();
+        bodyData.append("url", node.url);
+        bodyData.append("user", username);
+        bodyData.append("version", version);
+        let url = API_URL + "report/bookmarks/";
+        try {
+            fetch(url, {
+                method: "POST",
+                body: bodyData
+            }).then(res => res.json()).then(json => responseHandler('bookmark log', json.action, json.message));
+        } catch (error) {
+            console.error(error);
         }
-        if (node.url) {
-            let bodyData = new FormData();
-            bodyData.append("url", node.url);
-            bodyData.append("user", info.email);
-            bodyData.append("version", version);
-            let url = API_URL + "report/bookmarks/";
-            try {
-                let res = fetch(url, {method: "POST", body: bodyData});
-                console.debug("Bookmark log successful.");
-            } catch (error) {
-                console.error(error);
-            }
-        }
-    });
+    }
 }
 
 
@@ -251,8 +262,10 @@ function reportVisit(visit){
         bodyData.append("version", version);
         let url = API_URL + "report/logger/";
         try {
-            let res = fetch(url, {method: "POST", body: bodyData});
-            console.debug("Website log successful.");
+            fetch(url, {
+                method: "POST",
+                body: bodyData
+            }).then(res => res.json()).then(json => responseHandler('website log', json.action, json.message));
         } catch (error) {
             console.error(error);
         }
@@ -271,8 +284,10 @@ function reportScreenshot(){
             bodyData.append("version", version);
             let url = API_URL + "report/image/";
             try {
-                let res = fetch(url, {method: "POST", body: bodyData});
-                console.debug("Screenshot successful.");
+                fetch(url, {
+                    method: "POST",
+                    body: bodyData
+                }).then(res => res.json()).then(json => responseHandler('screenshot log', json.action, json.message));
             } catch (error) {
                 console.error(error);
             }
@@ -281,28 +296,36 @@ function reportScreenshot(){
 }
 
 async function domainLookup(domain,user) {
-        let url = API_URL + "check/v2/?uname=" + user + "&v=" + version + "&domain=" + domain;
-        try {
-            let res = await fetch(url);
-            return await res.json();
-        } catch (error) {
-            console.error(error);
-        }
-}
-
-async function domainDecision(domain,res){
-    console.debug("Site lookup for " + domain + " reports " + res.action);
-    if (res.action === "block") {
-        blockDomain(domain);
+    let bodyData = new FormData();
+    bodyData.append("uname", user);
+    bodyData.append("domain", domain);
+    bodyData.append("version", version);
+    let url = API_URL + "check/";
+    try {
+        let res = await fetch(url, {method: "POST", body: bodyData});
+        return await res.json();
+    } catch (error) {
+        console.error(error);
     }
 }
 
-function blockDomain(domain) {
-    chrome.storage.sync.get("email", function (info) {
-        let burl = "https://" + BLOCK_DOMAIN + "?url=" + domain + "&u=" + info.email;
+async function domainDecision(domain,res,user){
+    console.debug("Site lookup for " + domain + " reports " + res.action);
+    if (res.action === "block") {
+        let burl = "https://" + BLOCK_DOMAIN + "?url=" + domain + "&u=" + user;
         console.debug("Redirected to " + burl);
         chrome.tabs.update({
             url: burl
         });
-    });
+    }else if(res.action === "error"){
+        responseHandler('domain lookup',res.action,res.message);
+    }
+}
+
+function responseHandler(caller,responseAction,responseBody){
+    if (responseAction === "error") {
+        console.error("Error with "+caller+": "+responseBody);
+    }else {
+        console.debug(responseBody);
+    }
 }
