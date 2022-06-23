@@ -74,42 +74,46 @@ async function setServer(result){
         console.info('Saved settings to cache.');
     });
 }
-
-// Get user when event occurs, handle events thereafter
-chrome.storage.sync.get("email", function (info) {
     // On download, report download
     chrome.downloads.onCreated.addListener(function(e) {
-        reportDownload(e,info.email);
+        chrome.storage.sync.get("email", function (info) {
+            reportDownload(e, info.email);
+        });
     });
 
     // On visit, call page logger
     chrome.history.onVisited.addListener(function(result) {
-        reportVisit(result,info.email);
-        reportScreenshot(info.email);
+        chrome.storage.sync.get("email", function (info) {
+            reportVisit(result,info.email);
+            reportScreenshot(info.email);
+        });
     });
 
     // Check page if blocked
     chrome.webNavigation.onBeforeNavigate.addListener(function(details) {
-        if (!str_starts_with(details.url, "http:") && !str_starts_with(details.url, "https:")) {
-            return;
-        }
-        let url = details.url;
-        let urlParts = /^(?:\w+\:\/\/)?([^\/]+)([^\?]*)\??(.*)$/.exec(url);
-        let host = "https://"+urlParts[1];
-        console.debug("Checking Troxal for: " + host);
+        chrome.storage.sync.get("email", function (info) {
+            if (!str_starts_with(details.url, "http:") && !str_starts_with(details.url, "https:")) {
+                return;
+            }
+            let url = details.url;
+            let urlParts = /^(?:\w+\:\/\/)?([^\/]+)([^\?]*)\??(.*)$/.exec(url);
+            let host = "https://" + urlParts[1];
+            console.debug("Checking Troxal for: " + host);
 
-        domainLookup(host,info.email).then(r => domainDecision(host,r,info.email));
+            domainLookup(host, info.email).then(r => domainDecision(host, r, info.email));
+        });
     });
 
     // Alarms manager
     chrome.alarms.onAlarm.addListener(function(alarm) {
-        if (alarm.name === 'refreshableFunctions') {
-            troxalReportingRefreshable(false,info.email);
-        }else if(alarm.name === 'screenshotTimer'){
-            reportScreenshot(info.email);
-        }
+        chrome.storage.sync.get("email", function (info) {
+            if (alarm.name === 'refreshableFunctions') {
+                troxalReportingRefreshable(false, info.email);
+            } else if (alarm.name === 'screenshotTimer') {
+                reportScreenshot(info.email);
+            }
+        });
     });
-});
 
 // Refreshable functions
 function troxalReportingRefreshable(first,user){
